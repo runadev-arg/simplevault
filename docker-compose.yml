@@ -1,0 +1,111 @@
+name: simplevault
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:18.3-alpine
+    <<: *restart
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-simplevault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-simplevault}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks: [backend]
+    # NO host port mapping — backend network only.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    mem_limit: 512m
+    pids_limit: 200
+    security_opt:
+      - no-new-privileges:true
+
+  redis:
+    image: redis:7.4-alpine
+    <<: *restart
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    volumes:
+      - redis_data:/data
+    networks: [backend]
+    # NO host port mapping — backend network only.
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    mem_limit: 256m
+    pids_limit: 100
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    <<: *restart
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgres://${POSTGRES_USER:-simplevault}:${POSTGRES_PASSWORD:-changeme_dev_only}@postgres:5432/${POSTGRES_DB:-simplevault}
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: debug
+      CORS_ORIGINS: http://localhost:3000
+      JWT_SECRET: ${JWT_SECRET:-dev_only_replace_in_prod_32bytes_minimum_______}
+      SERVER_CHAIN_SECRET: ${SERVER_CHAIN_SECRET:-dev_only_audit_chain_hmac_secret_32bytes_min______}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:3001:3001"  # localhost only — for /health checks during dev
+    networks: [backend, frontend]
+    mem_limit: 512m
+    pids_limit: 200
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    # Pino writes to /tmp; keep filesystem read-only with a tmpfs for /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    <<: *restart
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    depends_on:
+      api: { condition: service_started }
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: [frontend]
+    mem_limit: 512m
+    pids_limit: 200
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
+volumes:
+  pg_data:
+  redis_data:
+
+networks:
+  backend:
+    driver: bridge
+    internal: true   # CRITICAL: postgres + redis cannot reach the internet
+  frontend:
+    driver: bridge
