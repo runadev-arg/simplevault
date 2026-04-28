@@ -67,7 +67,7 @@
 - **Audit checkpoint git repo**: where to host the off-machine `audit-checkpoints` git repo (separate VPS? GitHub private? cold storage)? Decide before Phase 10.
 - **SMTP provider**: which SMTP for invite emails (Postmark? Mailgun? self-hosted Postfix relay)? Decide before Phase 02 (signup) or Phase 07 (sharing) at latest.
 - **Operator's own 2FA**: should the operator account have stricter requirements than regular users (mandatory hardware key)? Decide before Phase 14.
-- **Off-site location for `pg_dump`**: S3-compatible (Backblaze B2? Cloudflare R2?) or separate VPS / NAS? Decide before Phase 14.
+- **Off-site location for `pg_dump`** (CONFIRMED 2026-04-28): rsync over SSH to operator-owned VPS/NAS. Before Phase 14, operator must provide: target host + SSH user + target path; backup container will need a dedicated SSH keypair (private key stored as Dokploy secret, public key in target's `authorized_keys` with `command=` restriction to a `rrsync`-style read-only-append wrapper for blast-radius reduction).
 
 ## Things to remember
 
