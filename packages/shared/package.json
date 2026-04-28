@@ -1,0 +1,26 @@
+{
+  "name": "@simplevault/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./errors": { "types": "./dist/error-codes.d.ts", "import": "./dist/error-codes.js" },
+    "./zod": { "types": "./dist/zod/index.d.ts", "import": "./dist/zod/index.js" }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "dependencies": { "zod": "^3.24.0" },
+  "devDependencies": {
+    "@simplevault/tsconfig": "workspace:*",
+    "@simplevault/eslint-config": "workspace:*",
+    "eslint": "^9.17.0",
+    "typescript": "~5.7.0"
+  }
+}
