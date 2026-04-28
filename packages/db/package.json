@@ -1,0 +1,33 @@
+{
+  "name": "@simplevault/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "node": "./dist/index.js" },
+    "./schema": { "types": "./dist/schema/index.d.ts", "node": "./dist/schema/index.js" }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.38.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.30.0",
+    "@types/pg": "^8.11.0",
+    "@simplevault/tsconfig": "workspace:*",
+    "@simplevault/eslint-config": "workspace:*",
+    "eslint": "^9.17.0",
+    "typescript": "~5.7.0"
+  }
+}
