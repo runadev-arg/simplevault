@@ -1,0 +1,36 @@
+{
+  "name": "@simplevault/crypto",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/node.js",
+  "browser": "./dist/browser.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/browser.js",
+      "node": "./dist/node.js",
+      "default": "./dist/node.js"
+    },
+    "./types": { "types": "./dist/types.d.ts", "import": "./dist/types.js" }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "dependencies": {
+    "libsodium-wrappers-sumo": "^0.7.15",
+    "@noble/hashes": "^1.6.0",
+    "bip39": "^3.1.0"
+  },
+  "devDependencies": {
+    "@types/libsodium-wrappers-sumo": "^0.7.0",
+    "@simplevault/tsconfig": "workspace:*",
+    "@simplevault/eslint-config": "workspace:*",
+    "eslint": "^9.17.0",
+    "typescript": "~5.7.0"
+  }
+}
