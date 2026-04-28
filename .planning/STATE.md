@@ -7,7 +7,7 @@
 ## Current position
 
 **Stage:** IMPLEMENTATION — Phase 01 in progress
-**Active phase:** 01 — Foundations (Waves 1–3 complete; Wave 4 Plan 04 (apps/api) COMPLETE; Plan 05 (apps/web) pending; then Wave 5)
+**Active phase:** 01 — Foundations (Waves 1–4 complete; Wave 5 Plans 06 (Dockerfiles) + 09 (CI) pending — parallel)
 **Active milestone:** M0 (Foundations)
 **Last commit on planning:** see `git log .planning/`
 
@@ -15,7 +15,7 @@
 
 | Phase | Status |
 |---|---|
-| 01 — Foundations | IN PROGRESS — Plans 01 (root scaffold) + 02 (tsconfig + eslint-config) + 03 (shared/crypto/db skeletons) + 04 (apps/api skeleton + /health) COMPLETE; Plans 05–10 pending |
+| 01 — Foundations | IN PROGRESS — Plans 01 (root scaffold) + 02 (tsconfig + eslint-config) + 03 (shared/crypto/db skeletons) + 04 (apps/api skeleton + /health) + 05 (apps/web Next.js + security middleware) COMPLETE; Plans 06–10 pending |
 | 02 — Auth + Crypto core | PLANNED |
 | 03 — 2FA + sessions | PLANNED |
 | 04 — Personal vault: credentials | PLANNED |
@@ -83,6 +83,7 @@ Plan Phase 01 (Foundations) via `/gsd:plan-phase 1`. All blocking decisions reso
 
 ## Changelog
 
+- **2026-04-28** — Phase 01 / Plan 05 (apps/web Next.js 15 App Router + security-headers middleware) executed. Next.js 15.1.0 + React 19.0.0 with `output: "standalone"` for Phase 06 Dockerfile, Tailwind v3.4.17 (class dark mode, dark-by-default zinc-950), placeholder home page (`lang="es"`, robots noindex/nofollow). Strict per-request CSP middleware: 16-byte base64 nonce on every request (matcher excludes `_next/static`, `_next/image`, `favicon.ico`, `robots.txt`, `sitemap.xml`), `script-src 'self' 'nonce-...' 'strict-dynamic'`, no `unsafe-inline`/`unsafe-eval`, plus HSTS preload, X-Frame-Options DENY, Referrer-Policy no-referrer, Permissions-Policy (geolocation/mic/camera/payment/usb/FLoC blocked), COOP/CORP same-origin, X-Content-Type-Options nosniff, X-DNS-Prefetch-Control off. Nonce propagated to server components via `x-nonce` request header. Verified via `curl -sI`: all headers present on 200 + 404, two consecutive requests produce different nonces. Decisions: Tailwind v3 over v4-alpha (stability), `eslint-config-next` integration deferred (still legacy non-flat-config; non-blocking warning during `next build`). Notable deviations: middleware uses bundler-style imports (no `.js` extension) since Next webpack ignores NodeNext rules; Uint8Array `.reduce()` from plan replaced with `for...of` for TS strictness. See `.planning/phases/01-foundations/01-05-SUMMARY.md`. Wave 4 complete; Wave 5 (Plans 06 Dockerfiles + 09 CI, parallel) is now unblocked.
 - **2026-04-28** — Project initialized via `/gsd:newproject`. PROJECT.md, REQUIREMENTS.md (with v1 + v2 + permanent-out-of-scope sections), ROADMAP.md (14 phases / 8 milestones, every phase with explicit security-auditor gate), `.planning/security/` scaffold (THREAT-MODEL, AUDIT-LOG, FINDINGS, AGENTS), and STATE.md created. Research outputs: CRYPTO-STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md.
 - **2026-04-28** — Deployment target confirmed: Dokploy at `pass.runadev.com`, managed Postgres 18.3, fresh Redis, app-level pg_dump backups (replaces restic sidecar), Traefik (Dokploy) replaces Caddy, security headers move to app layer. REQ-INFRA-001/002/005, REQ-WEBSEC-001..004, and Phase 01/14 of ROADMAP.md to be reflected in their next edit (deferred until /gsd:plan-phase 1 — adjustments will be done in-phase, not in upfront docs).
 - **2026-04-28** — Phase 01 / Plan 04 (apps/api NestJS skeleton + `/health`) executed. NestJS 10 service on :3001 with helmet (strict CSP + HSTS), restrictive CORS allowlist, global ValidationPipe (whitelist+forbidNonWhitelisted+transform), AllExceptionsFilter returning canonical `{error:{code,message,requestId}}`, nestjs-pino with sensitive-field redaction (password, secretKey, recoveryPhrase, jwt, etc.), DbService (real `SELECT 1` ping via @simplevault/db pool) + RedisService (real `PING` via ioredis) wired as @Global modules, HealthService aggregating both into HealthResponse shape from @simplevault/shared/zod. Notable deviations: app declared `"type":"module"` and tsconfig overrides to NodeNext (required to consume ESM workspace packages); class-validator + class-transformer + pg + @types/pg added (runtime peers / direct type imports); DbService no longer throws on missing DATABASE_URL — degrades to `db:down` so /health stays 200 with status:degraded as plan's verify expected; tsBuildInfoFile pinned per-package to avoid root collision. `migrate-then-start.sh` deferred to Plan 06 alongside the Dockerfile. See `.planning/phases/01-foundations/01-04-SUMMARY.md`. Wave 4 Plan 05 (apps/web) still pending; Wave 5 (Dockerfiles + CI) blocked on Plan 05.
