@@ -6,8 +6,8 @@
 
 ## Current position
 
-**Stage:** PLANNING COMPLETE — pre-implementation
-**Active phase:** none yet (next: Phase 01)
+**Stage:** IMPLEMENTATION — Phase 01 in progress
+**Active phase:** 01 — Foundations (Wave 1 complete; next: Wave 2 / Plan 02)
 **Active milestone:** M0 (Foundations)
 **Last commit on planning:** see `git log .planning/`
 
@@ -15,7 +15,7 @@
 
 | Phase | Status |
 |---|---|
-| 01 — Foundations | PLANNED — not started |
+| 01 — Foundations | IN PROGRESS — Plan 01 (root scaffold) COMPLETE; Plans 02–10 pending |
 | 02 — Auth + Crypto core | PLANNED |
 | 03 — 2FA + sessions | PLANNED |
 | 04 — Personal vault: credentials | PLANNED |
@@ -85,3 +85,4 @@ Plan Phase 01 (Foundations) via `/gsd:plan-phase 1`. All blocking decisions reso
 
 - **2026-04-28** — Project initialized via `/gsd:newproject`. PROJECT.md, REQUIREMENTS.md (with v1 + v2 + permanent-out-of-scope sections), ROADMAP.md (14 phases / 8 milestones, every phase with explicit security-auditor gate), `.planning/security/` scaffold (THREAT-MODEL, AUDIT-LOG, FINDINGS, AGENTS), and STATE.md created. Research outputs: CRYPTO-STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md.
 - **2026-04-28** — Deployment target confirmed: Dokploy at `pass.runadev.com`, managed Postgres 18.3, fresh Redis, app-level pg_dump backups (replaces restic sidecar), Traefik (Dokploy) replaces Caddy, security headers move to app layer. REQ-INFRA-001/002/005, REQ-WEBSEC-001..004, and Phase 01/14 of ROADMAP.md to be reflected in their next edit (deferred until /gsd:plan-phase 1 — adjustments will be done in-phase, not in upfront docs).
+- **2026-04-28** — Phase 01 / Plan 01 (root scaffold) executed. Turborepo + pnpm workspace bootstrapped: package.json, pnpm-workspace.yaml, turbo.json, tsconfig.base.json, .npmrc (strict + isolated), .nvmrc (22), .gitignore, .editorconfig, apps/ + packages/ stubs, pnpm-lock.yaml committed. `pnpm install` clean, `turbo run build` returns "no tasks". See `.planning/phases/01-foundations/01-01-SUMMARY.md`. Wave 2 (Plan 02 — tsconfig + eslint packages) is now unblocked.
