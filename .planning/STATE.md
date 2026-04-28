@@ -50,12 +50,24 @@
 9. Unanimous deletion with 30d timeout + 7d notice + owner override.
 10. Per-user X25519 sealed-box key wrapping for shared vaults.
 
+## Operator deployment target (CONFIRMED 2026-04-28)
+
+- **Platform:** Dokploy on existing VPS (Traefik-based PaaS over Docker)
+- **Domain:** `pass.runadev.com` — operator must add A record to VPS IP; Dokploy + Traefik provisions Let's Encrypt TLS automatically
+- **Postgres:** managed by Dokploy, **PostgreSQL 18.3** (bleeding-edge — verify Drizzle Kit + `pg` driver compatibility in Phase 01; expected OK since 18 doesn't change wire protocol)
+- **Redis:** fresh instance to be created in Dokploy for SimpleVault
+- **Backups:** VPS-level snapshots already exist (operator's hosting provider). **STILL NEED app-level logical backups** — VPS snapshots can be corrupted with the data. Add lightweight `pg_dump` cron service to nightly-dump Postgres logical backup to a separate location (S3 / off-site rsync). NOT shipping `restic` sidecar — replaced by simpler `pg_dump` cron.
+- **Reverse proxy:** Traefik (Dokploy-managed) — **Caddy is OUT**. Security headers move to app layer (Next.js middleware + NestJS helmet) so they don't depend on the proxy.
+- **Migrations:** simpler pattern — Dockerfile `prestart` hook runs `drizzle-kit migrate` before `node dist/main.js` (vs separate init container). Less Dokploy friction.
+- **Secrets:** stored in Dokploy's encrypted env-var UI (NOT in `.env` files in git).
+
 ## Open questions / pending decisions
 
 - **REQ-CRYPTO-003 confirmation**: Operator should explicitly OK or VETO the two-secret model upgrade before Phase 02.
 - **Audit checkpoint git repo**: where to host the off-machine `audit-checkpoints` git repo (separate VPS? GitHub private? cold storage)? Decide before Phase 10.
 - **SMTP provider**: which SMTP for invite emails (Postmark? Mailgun? self-hosted Postfix relay)? Decide before Phase 02 (signup) or Phase 07 (sharing) at latest.
 - **Operator's own 2FA**: should the operator account have stricter requirements than regular users (mandatory hardware key)? Decide before Phase 14.
+- **Off-site location for `pg_dump`**: S3-compatible (Backblaze B2? Cloudflare R2?) or separate VPS / NAS? Decide before Phase 14.
 
 ## Things to remember
 
@@ -72,3 +84,4 @@ Run `/gsd:plan-phase 1` to generate the executable plan for Phase 01 (Foundation
 ## Changelog
 
 - **2026-04-28** — Project initialized via `/gsd:newproject`. PROJECT.md, REQUIREMENTS.md (with v1 + v2 + permanent-out-of-scope sections), ROADMAP.md (14 phases / 8 milestones, every phase with explicit security-auditor gate), `.planning/security/` scaffold (THREAT-MODEL, AUDIT-LOG, FINDINGS, AGENTS), and STATE.md created. Research outputs: CRYPTO-STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md.
+- **2026-04-28** — Deployment target confirmed: Dokploy at `pass.runadev.com`, managed Postgres 18.3, fresh Redis, app-level pg_dump backups (replaces restic sidecar), Traefik (Dokploy) replaces Caddy, security headers move to app layer. REQ-INFRA-001/002/005, REQ-WEBSEC-001..004, and Phase 01/14 of ROADMAP.md to be reflected in their next edit (deferred until /gsd:plan-phase 1 — adjustments will be done in-phase, not in upfront docs).
