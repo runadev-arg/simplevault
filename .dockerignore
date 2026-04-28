@@ -1,0 +1,50 @@
+# Root .dockerignore — applies to all monorepo builds (build context = repo root).
+# Keep build context tiny (<5MB) for fast layer cache + small base.
+
+# Dependency + build outputs (rebuilt inside the image)
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/.tsbuildinfo
+**/coverage
+
+# Secrets — never copied in
+**/.env
+**/.env.*
+!**/.env.example
+
+# VCS / CI / dev tooling
+**/.git
+**/.github
+.gitignore
+.gitattributes
+**/.vscode
+**/.idea
+
+# Logs / OS noise
+**/*.log
+**/.DS_Store
+**/Thumbs.db
+**/tmp
+
+# Planning + docs (not needed at runtime)
+.planning
+docs
+README.md
+CHANGELOG.md
+LICENSE
+
+# Docker artifacts (avoid recursive context)
+**/Dockerfile
+**/.dockerignore
+docker-compose*.yml
+
+# Tests (not needed in production images)
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/test
+**/tests

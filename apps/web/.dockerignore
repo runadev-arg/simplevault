@@ -1,0 +1,23 @@
+# apps/web — see apps/api/.dockerignore note. The canonical build uses
+# `docker build -f apps/web/Dockerfile .` with the repo root as context.
+node_modules
+.next
+dist
+.turbo
+.tsbuildinfo
+coverage
+.env
+.env.*
+!.env.example
+.git
+*.log
+.DS_Store
+Dockerfile
+.dockerignore
+__tests__
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+test
+tests

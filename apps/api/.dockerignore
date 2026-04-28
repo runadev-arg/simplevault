@@ -1,0 +1,22 @@
+# apps/api — used only when build context = apps/api (not the canonical setup,
+# but defensive in case someone runs `docker build apps/api`). The canonical
+# build uses `docker build -f apps/api/Dockerfile .` with the repo root.
+node_modules
+.next
+dist
+.turbo
+.tsbuildinfo
+coverage
+.env
+.env.*
+!.env.example
+.git
+*.log
+.DS_Store
+Dockerfile
+.dockerignore
+__tests__
+*.test.ts
+*.spec.ts
+test
+tests
