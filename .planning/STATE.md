@@ -63,7 +63,7 @@
 
 ## Open questions / pending decisions
 
-- **REQ-CRYPTO-003 confirmation**: Operator should explicitly OK or VETO the two-secret model upgrade before Phase 02.
+- ~~REQ-CRYPTO-003 confirmation~~ — **CONFIRMED 2026-04-28: two-secret model (1Password-style) is GO.** Signup generates a 128-bit secret_key shown once in an Emergency Kit. Server stores only `Argon2id(secret_key, server_salt)` for verification. New-device logins require re-entering the secret_key (can be persisted device-locally encrypted afterwards).
 - **Audit checkpoint git repo**: where to host the off-machine `audit-checkpoints` git repo (separate VPS? GitHub private? cold storage)? Decide before Phase 10.
 - **SMTP provider**: which SMTP for invite emails (Postmark? Mailgun? self-hosted Postfix relay)? Decide before Phase 02 (signup) or Phase 07 (sharing) at latest.
 - **Operator's own 2FA**: should the operator account have stricter requirements than regular users (mandatory hardware key)? Decide before Phase 14.
@@ -79,7 +79,7 @@
 
 ## Next action
 
-Run `/gsd:plan-phase 1` to generate the executable plan for Phase 01 (Foundations). Before that, **review and confirm REQ-CRYPTO-003 (two-secret model upgrade)** — flag it now if you disagree, since it cascades through Phases 02, 07, 08, 11.
+Plan Phase 01 (Foundations) via `/gsd:plan-phase 1`. All blocking decisions resolved.
 
 ## Changelog
 
