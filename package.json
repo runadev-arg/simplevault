@@ -12,6 +12,9 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "db:generate": "pnpm --filter @simplevault/db db:generate",
+    "db:migrate": "pnpm --filter @simplevault/db db:migrate",
+    "db:studio": "pnpm --filter @simplevault/db db:studio",
     "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {
