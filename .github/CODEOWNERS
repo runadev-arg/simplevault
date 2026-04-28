@@ -1,0 +1,8 @@
+# Operator owns everything.
+* @germankatz
+
+# Security-critical code requires extra review (when team grows beyond solo).
+/.planning/security/        @germankatz
+/packages/crypto/           @germankatz
+/apps/api/src/auth/         @germankatz
+/apps/api/src/audit/        @germankatz

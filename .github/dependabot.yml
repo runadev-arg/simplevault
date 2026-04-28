@@ -1,0 +1,39 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "production"
+      - dependency-type: "development"
+    groups:
+      nest:
+        patterns: ["@nestjs/*"]
+      next:
+        patterns: ["next", "react", "react-dom", "@types/react*", "eslint-config-next"]
+      drizzle:
+        patterns: ["drizzle-orm", "drizzle-kit"]
+      typescript:
+        patterns: ["typescript", "typescript-eslint", "@typescript-eslint/*"]
+      eslint:
+        patterns: ["eslint", "eslint-*"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "docker"
+    directory: "/apps/api"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/apps/web"
+    schedule:
+      interval: "weekly"
