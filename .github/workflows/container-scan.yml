@@ -13,6 +13,10 @@ on:
     paths:
       - 'apps/api/Dockerfile'
       - 'apps/web/Dockerfile'
+  schedule:
+    # Weekly full scan regardless of which paths changed (catches base-image
+    # CVEs and transitive issues that don't trigger the path-filtered runs).
+    - cron: '0 5 * * 1'
 
 permissions:
   contents: read
