@@ -39,3 +39,21 @@ export interface CryptoApi {
 
 // The default export is resolved via conditional exports map.
 // Don't export an implementation here — keep this file type-only.
+
+// --- Public TYPE surface ---------------------------------------------------
+// Re-export every value-bearing module's TYPE-LEVEL exports so consumers
+// of `@simplevault/crypto/types` (or `import type { ... } from
+// "@simplevault/crypto"`) get a single import site for type names without
+// pulling either runtime barrel into their build graph.
+//
+// This is types-only (`export type`); the runtime implementations are
+// resolved via the conditional exports map in package.json.
+export type { Argon2Params } from "./argon2id.js";
+export type { AeadCiphertext } from "./aead.js";
+export type { CalibrationResult } from "./calibrate.js";
+export type {
+  DeriveMasterKekInput,
+  DeriveRecoveryKekInput,
+  WrappedKeyBlob,
+} from "./key-hierarchy.js";
+export type { KxKeyPair } from "./sealed-box.js";

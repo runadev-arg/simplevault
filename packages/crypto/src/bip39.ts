@@ -8,7 +8,7 @@ import { ready } from "./argon2id.js";
  *
  * Browser-bundle hygiene: this module imports `bip39` (works in browser via
  * its bundled `pbkdf2`/`randombytes` shims), `@noble/hashes` (pure JS), and
- * `libsodium-wrappers-sumo` for entropy. NO `node:crypto` / `node:buffer`.
+ * `libsodium-wrappers-sumo` for entropy. NO Node-runtime built-in modules.
  *
  * Entropy source: libsodium's `randombytes_buf` (via `bip39.entropyToMnemonic`)
  * NOT `bip39.generateMnemonic()`'s default — that pulls `crypto.randomBytes`

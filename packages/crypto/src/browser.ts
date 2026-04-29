@@ -1,7 +1,9 @@
 import type { CryptoApi } from "./index.js";
 
 // Re-export Phase-02 primitives via the browser entry of the conditional
-// exports map. Keep this file free of any `node:*` import.
+// exports map. Keep this file free of any built-in Node-runtime module
+// import. The dist/browser.js grep step in the plan SUMMARY enforces
+// this (see 02-04-SUMMARY.md for the exact regex).
 export * from "./argon2id.js";
 export * from "./aead.js";
 export * from "./calibrate.js";
