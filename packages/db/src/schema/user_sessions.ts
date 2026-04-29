@@ -1,7 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
-  foreignKey,
   index,
   pgTable,
   text,
@@ -63,12 +62,6 @@ export const userSessions = pgTable(
       .where(sql`revoked_at IS NULL`),
     /** Family-revoke target index. */
     familyIdx: index("user_sessions_family_idx").on(t.familyId),
-    /** Self-FK named explicitly so the auditor can find it in the migration. */
-    prevTokenFk: foreignKey({
-      columns: [t.prevTokenId],
-      foreignColumns: [t.id],
-      name: "user_sessions_prev_token_fk",
-    }).onDelete("set null"),
   }),
 );
 
