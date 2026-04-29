@@ -7,6 +7,7 @@ import { CryptoModule } from "./crypto/crypto.module.js";
 import { DbModule } from "./db/db.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { InviteModule } from "./invite/invite.module.js";
+import { MeModule } from "./me/me.module.js";
 import { RedisModule } from "./redis/redis.module.js";
 
 @Module({
@@ -65,6 +66,7 @@ import { RedisModule } from "./redis/redis.module.js";
     HealthModule,
     InviteModule,
     AuthModule,
+    MeModule,
   ],
 })
 export class AppModule {}
