@@ -103,7 +103,7 @@ describe("bip39.computeRecoveryLookupHash", () => {
 });
 
 describe("bip39 barrel parity", () => {
-  it("browser + node barrels both export the bip39 surface", async () => {
+  it("browser exports the bip39 surface; node MUST NOT (server never sees mnemonics)", async () => {
     const browserMod = await import("../src/browser.js");
     const nodeMod = await import("../src/node.js");
     for (const name of [
@@ -113,7 +113,7 @@ describe("bip39 barrel parity", () => {
       "computeRecoveryLookupHash",
     ]) {
       expect(browserMod, `browser missing ${name}`).toHaveProperty(name);
-      expect(nodeMod, `node missing ${name}`).toHaveProperty(name);
+      expect(nodeMod).not.toHaveProperty(name);
     }
   });
 });

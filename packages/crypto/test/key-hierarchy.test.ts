@@ -250,19 +250,21 @@ describe("key-hierarchy AAD downgrade defence", () => {
 });
 
 describe("key-hierarchy barrel parity", () => {
-  it("browser + node barrels both export the hierarchy surface", async () => {
+  it("browser exports the full hierarchy surface; node exports only server-safe symbols", async () => {
     const browserMod = await import("../src/browser.js");
     const nodeMod = await import("../src/node.js");
-    for (const name of [
-      "deriveMasterKek",
-      "deriveRecoveryKek",
-      "wrapKey",
-      "unwrapKey",
-      "encodeAad",
-      "AAD_VERSION",
-    ]) {
+
+    // Always-shared (server-safe) symbols.
+    for (const name of ["wrapKey", "unwrapKey", "encodeAad", "AAD_VERSION"]) {
       expect(browserMod, `browser missing ${name}`).toHaveProperty(name);
       expect(nodeMod, `node missing ${name}`).toHaveProperty(name);
+    }
+
+    // Browser-only symbols (take password / secret_key / mnemonic and so
+    // MUST NOT be reachable from the Node barrel — see node.ts invariant).
+    for (const name of ["deriveMasterKek", "deriveRecoveryKek"]) {
+      expect(browserMod, `browser missing ${name}`).toHaveProperty(name);
+      expect(nodeMod).not.toHaveProperty(name);
     }
   });
 });
