@@ -11,9 +11,7 @@ const nextConfig = {
   outputFileTracingRoot: path.join(__dirname, "../../"),
   reactStrictMode: true,
   poweredByHeader: false,
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
   // No images config yet (no images in v1 pages); revisit Phase 05.
 };
 
