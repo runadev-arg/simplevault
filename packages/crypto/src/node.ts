@@ -7,6 +7,7 @@ export * from "./aead.js";
 export * from "./calibrate.js";
 export * from "./bip39.js";
 export * from "./key-hierarchy.js";
+export * from "./sealed-box.js";
 
 const notImplemented = (name: string): never => {
   throw new Error(`@simplevault/crypto node.${name}() not yet implemented (Phase 02)`);
