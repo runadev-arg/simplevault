@@ -22,21 +22,35 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const r: unknown = exception.getResponse();
-      if (typeof r === "string") {
+      // Honor `{ error: { code, message } }` embedded by services so the
+      // exception filter doesn't collapse domain errors (e.g. INVITE_INVALID)
+      // back to the generic status-code map.
+      if (typeof r === "object" && r !== null && "error" in r) {
+        const e = (r as { error?: unknown }).error;
+        if (typeof e === "object" && e !== null) {
+          const ec = (e as { code?: unknown }).code;
+          const em = (e as { message?: unknown }).message;
+          if (typeof ec === "string") code = ec as ErrorCode;
+          if (typeof em === "string") message = em;
+        }
+      } else if (typeof r === "string") {
         message = r;
       } else if (typeof r === "object" && r !== null && "message" in r) {
         const m = (r as { message?: unknown }).message;
         if (typeof m === "string") message = m;
         else if (Array.isArray(m)) message = m.join(", ");
       }
-      const statusMap: Record<number, ErrorCode> = {
-        [HttpStatus.UNAUTHORIZED]: ErrorCodes.AUTH_INVALID_CREDENTIALS,
-        [HttpStatus.FORBIDDEN]: ErrorCodes.VAULT_FORBIDDEN,
-        [HttpStatus.BAD_REQUEST]: ErrorCodes.VALIDATION_FAILED,
-        [HttpStatus.TOO_MANY_REQUESTS]: ErrorCodes.AUTH_RATE_LIMITED,
-      };
-      const mapped = statusMap[status];
-      if (mapped) code = mapped;
+      // Status-code default fallback only if no domain code was provided.
+      if (code === ErrorCodes.SERVER_INTERNAL) {
+        const statusMap: Record<number, ErrorCode> = {
+          [HttpStatus.UNAUTHORIZED]: ErrorCodes.AUTH_INVALID_CREDENTIALS,
+          [HttpStatus.FORBIDDEN]: ErrorCodes.VAULT_FORBIDDEN,
+          [HttpStatus.BAD_REQUEST]: ErrorCodes.VALIDATION_FAILED,
+          [HttpStatus.TOO_MANY_REQUESTS]: ErrorCodes.AUTH_RATE_LIMITED,
+        };
+        const mapped = statusMap[status];
+        if (mapped) code = mapped;
+      }
     } else {
       this.logger.error({ requestId, err: exception }, "unhandled exception");
     }

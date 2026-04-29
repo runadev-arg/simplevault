@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { LoggerModule } from "nestjs-pino";
 
+import { AuthModule } from "./auth/auth.module.js";
 import { CryptoModule } from "./crypto/crypto.module.js";
 import { DbModule } from "./db/db.module.js";
 import { HealthModule } from "./health/health.module.js";
@@ -50,6 +51,7 @@ import { RedisModule } from "./redis/redis.module.js";
     CryptoModule,
     HealthModule,
     InviteModule,
+    AuthModule,
   ],
 })
 export class AppModule {}
