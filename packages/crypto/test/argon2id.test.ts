@@ -69,14 +69,17 @@ describe("deriveKey", () => {
     );
   });
 
-  it("default params take >100ms (sanity: not zero iterations)", async () => {
+  it("default params take >50ms (sanity: not zero iterations)", async () => {
+    // 50ms floor is a sanity check that we didn't accidentally pass 0
+    // iterations or skip the KDF entirely. Real-world Argon2id with
+    // m=64MiB,t=3 lands ~90-800ms depending on hardware.
     await ready();
     const password = enc.encode("pw");
     const salt = sodium.randombytes_buf(16);
     const t0 = performance.now();
     await deriveKey(password, salt, ARGON2_DEFAULT_PARAMS);
     const dt = performance.now() - t0;
-    expect(dt).toBeGreaterThan(100);
+    expect(dt).toBeGreaterThan(50);
   });
 });
 

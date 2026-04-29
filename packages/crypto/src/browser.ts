@@ -1,5 +1,9 @@
 import type { CryptoApi } from "./index.js";
 
+// Re-export Phase-02 primitives via the browser entry of the conditional
+// exports map. Keep this file free of any `node:*` import.
+export * from "./argon2id.js";
+
 const notImplemented = (name: string): never => {
   throw new Error(`@simplevault/crypto browser.${name}() not yet implemented (Phase 02)`);
 };
