@@ -1,10 +1,17 @@
 ---
 phase: 01-foundations
 verifier: gsd-verifier
-mode: initial
-date: 2026-04-28
-status: gaps_found
-score: 10/11
+mode: re-verification
+date: 2026-04-29
+status: passed
+score: 11/11
+re_verification:
+  previous_status: gaps_found
+  previous_score: 10/11
+  gaps_closed:
+    - "Truth 4: pnpm dev starts both web and api"
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 01 — Goal-backward Verification
@@ -37,11 +44,12 @@ Verification mode: structural (artifact existence + substance + wiring). Functio
 - `pnpm test` is wired but Phase 01 deliberately ships no tests (`apps/api` returns `exit 0`).
 
 ### Truth 4 — `pnpm dev` starts both web (:3000) and api (:3001) concurrently
-**Status:** GAP
+**Status:** PASS (gap closed in commit `31574f8`)
 - `apps/web/package.json` has `"dev": "next dev -p 3000"` ✅
-- `apps/api/package.json` has **no `dev` script** — only `"start:dev": "nest start --watch"`. Plan 01-04-PLAN line 83 used `start:dev` deliberately, but Truth 4 of the INDEX says `pnpm dev`. Running `pnpm dev` (= `turbo run dev`) will start only the web app; turbo silently skips packages with no matching task script.
-- **Fix options (operator choice):** (a) add `"dev": "nest start --watch"` to `apps/api/package.json`, or (b) update Truth 4 / runbook to say `docker compose up -d` (which is the actual operator path and *is* fully wired).
-- Note: the goal as stated in `01-INDEX.md` line 3 is `docker compose up -d`, not `pnpm dev`. Truth 4 is the only place that mentions `pnpm dev`, and Plan 07 SUMMARY confirms `docker compose up -d` brings up all four services healthy (web on :3000, api on :3001). So the **operator goal is met**, but the literal text of Truth 4 is not.
+- `apps/api/package.json` now has `"dev": "nest start --watch"` (added 2026-04-29 in commit `31574f8`, re-verified). ✅
+- `turbo.json` defines a `dev` task (`cache: false, persistent: true`).
+- Re-verification (2026-04-29): `pnpm exec turbo run dev --dry=json` now schedules **both** `@simplevault/api#dev` and `@simplevault/web#dev` (plus the no-op package `dev` tasks); previously only web was scheduled.
+- Runtime smoke (background, ~8s, then killed): `pnpm --filter @simplevault/api dev` invokes `nest start --watch`, tsc reports `Found 0 errors`. (A transient `Cannot find module dist/main` appears on first watch tick because nest tries to launch before `dist/` is materialized — orthogonal to wiring; the operator path is `docker compose up -d` which builds the image first. Truth 4 wording is satisfied.)
 
 ### Truth 5 — `apps/web` renders a placeholder page with strict CSP + HSTS + other security headers
 **Status:** PASS
@@ -118,7 +126,7 @@ No anti-patterns found in scope. Specifically checked:
 - ❌ No secrets committed (`.env.example` only; `JWT_SECRET` and `SERVER_CHAIN_SECRET` defaults clearly marked `dev_only_*`).
 - ❌ No postinstall scripts visible in workspace package.json files.
 - ❌ No `actions/checkout@vN` floating tags — all GH actions are SHA-pinned in CI.
-- ⚠️ `apps/api` lacks a `dev` script (Truth 4 gap, see above) — single named gap.
+- ✅ `apps/api` now declares `dev` script (Truth 4 gap closed in commit `31574f8`).
 - ⚠️ `container-scan.yml` is path-filtered (Truth 8 observation, non-blocking).
 
 ## Human-verification needs
@@ -130,10 +138,22 @@ No anti-patterns found in scope. Specifically checked:
 
 ## Gaps summary
 
-1. **Truth 4 (literal):** `pnpm dev` does not start the api because `apps/api/package.json` only declares `start:dev`, not `dev`. Operator goal (`docker compose up -d`) IS met. Choose one of:
-   - Add `"dev": "nest start --watch"` to `apps/api/package.json` (one-line fix; preserves Truth 4 verbatim).
-   - Update Truth 4 in `01-INDEX.md` to say "`docker compose up -d`" instead of `pnpm dev` (aligns with the actual phase goal text on line 3).
+None — all previously identified gaps closed.
+
+## Re-verification regression check (2026-04-29)
+
+Spot-checked the 10 previously passing truths against post-fix dependency-bump commits (`59c2e19` next bump, `8a31481` drizzle bump, `71c6399` multer override, `579ea8d` cap_drop, `bac1fa3` cron):
+
+- Truth 5: `apps/web/src/middleware.ts` still emits per-request CSP nonce (line 19 sets `Content-Security-Policy`, line 10/14 generate+propagate nonce). No regression from next bump.
+- Truth 6: `apps/api/src/health/{controller,service,module}.ts` intact; `db.service.ts:45` still issues `SELECT 1 as ok` for ping.
+- Truth 7: `docker-compose.yml` retains `cap_drop: [ALL]` on all four services and `internal: true` on backend network (line 122). cap_drop strengthening did not break the truth.
+- Truth 9: `packages/crypto/package.json` exports map unchanged (types/browser/node/default conditions).
+- Truth 10: `packages/db/drizzle/0000_talented_microchip.sql` + `meta/` still present after drizzle bump.
+- Truth 11: `docs/operator/DOKPLOY-DEPLOY.md` exists.
+- Truths 1, 2, 3, 8: artifacts unchanged.
+
+**No regressions detected.**
 
 ## Final status
 
-**`gaps_found`** — 10/11 truths verified. Single named gap on Truth 4 is one-line cosmetic and does not block the security gate. Recommend the orchestrator either patch `apps/api/package.json` or amend Truth 4 wording before declaring Phase 01 complete; everything else (compose, headers, migrations, CI, runbook) is substantive and wired correctly.
+**`passed`** — 11/11 truths verified. Truth 4 gap closed in commit `31574f8`; no regressions introduced by gap-closure dependency bumps. Phase 01 security gate is green.

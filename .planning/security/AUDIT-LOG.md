@@ -68,3 +68,40 @@ Lockfile clean, workspace-protocol use consistent, no typosquats, hygiene solid 
 **Verdict:** gaps_found (10/11 truths verified). The single failed truth is a literal-wording gap, not a functional gap — operator's actual goal (`docker compose up -d`) is fully met.
 **Report:** `.planning/phases/01-foundations/01-VERIFICATION.md`
 **Next review:** after closure of FINDING-0007 — re-verify Truth 4.
+
+---
+
+## 2026-04-29 — gsd-verifier — Phase 01 (re-verification)
+
+**Scope:** Re-verify Truth 4 (`pnpm dev` schedules api+web) after FINDING-0007 closure; quick regression check on Truths 5-7, 9-11 after dep bumps.
+**Method:** grep + file checks + `turbo run dev --dry=json`.
+**Findings:** none new.
+**Verdict:** **PASS — 11/11 truths verified.** Gap closed (Truth 4); no regressions from dep bumps.
+**Findings filed:** none. FINDING-0007 → VERIFIED-CLOSED.
+**Report:** `.planning/phases/01-foundations/01-VERIFICATION.md` (updated in place with re-verification frontmatter).
+**Next review:** Phase 02 implementation.
+
+---
+
+## 2026-04-29 — infra-deployment-auditor — Phase 01 (re-run)
+
+**Scope:** Verify FINDING-0005 + FINDING-0006 closure; regression check on docker-compose + Dockerfiles + app-layer headers.
+**Method:** Static analysis + brief runtime healthcheck (`docker compose up -d postgres redis`).
+**Findings:** Critical 0 / High 0 / Medium 0 (carried-over from 2026-04-28 unchanged) / Low 0 (carried-over) / Info 0.
+**Verdict:** **PASS.** Both Highs VERIFIED-CLOSED. Postgres/redis come up healthy with `cap_drop:[ALL]` + minimal `cap_add` (postgres: SETUID/SETGID/DAC_READ_SEARCH/CHOWN/FOWNER; redis: SETUID/SETGID). `security_opt: no-new-privileges:true` on both.
+**Findings filed:** none new. FINDING-0005 + FINDING-0006 → VERIFIED-CLOSED.
+**Report:** `.planning/security/audit-reports/2026-04-29-infra-deployment-auditor-phase01-rerun.md`.
+**Next review:** Phase 14 (production deploy gate); also any change to docker-compose, Dockerfiles, or app-layer security middleware.
+
+---
+
+## 2026-04-29 — dependency-supply-chain-auditor — Phase 01 (re-run + lodash closure)
+
+**Scope:** Verify FINDING-0001..0004 closure; full `pnpm audit --prod --audit-level=high` re-run; check for new CVEs surfaced by the bumps.
+**Method:** Lockfile inspection + `pnpm install --frozen-lockfile` + `pnpm audit`.
+**Findings:** Critical 0 / High 1 (lodash — patch became available since 2026-04-28; filed as FINDING-0009 and closed within same gate cycle via `pnpm.overrides`) / Medium 4 prod (carry-over, below blocking threshold) / Dev-only Highs 2 (glob CLI command-injection + picomatch ReDoS via `@nestjs/cli@10.4.9` — non-blocking, will clear with NestJS 11 in Phase 02) / Low 3 dev / Info 7.
+**Verdict:** **PASS.** Critical 0; production High 0 after lodash override (commit `ac55411`). All FINDING-0001..0004 + FINDING-0009 VERIFIED-CLOSED.
+**Findings filed:** FINDING-0009 (closed same cycle).
+**Report:** `.planning/security/audit-reports/2026-04-29-dependency-supply-chain-auditor-phase01-rerun.md`.
+**Tech-debt tracked:** Two `pnpm.overrides` (multer + lodash) to remove during Phase 02 NestJS 11 upgrade. Dev-deps Highs (glob/picomatch via @nestjs/cli) acceptable for Phase 01; remediated by Phase 02.
+**Next review:** Recurring weekly via Dependabot + cron-driven `pnpm audit` in CI; also re-run on next phase gate.
