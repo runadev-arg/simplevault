@@ -19,11 +19,11 @@
     "clean": "rm -rf dist .tsbuildinfo"
   },
   "dependencies": {
-    "drizzle-orm": "^0.38.0",
+    "drizzle-orm": "^0.45.2",
     "pg": "^8.13.0"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.30.0",
+    "drizzle-kit": "^0.31.10",
     "@types/pg": "^8.11.0",
     "@simplevault/tsconfig": "workspace:*",
     "@simplevault/eslint-config": "workspace:*",
