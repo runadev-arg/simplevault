@@ -6,8 +6,8 @@
 
 ## Current position
 
-**Stage:** IMPLEMENTATION — **Phase 01 CLOSED 2026-04-29**. **Phase 02 IN PROGRESS** — Wave 1 (Plan 01 NestJS 11 upgrade) **DONE 2026-04-29**; Wave 2 Plan 02 (crypto Argon2id+AEAD+calibrate) **DONE 2026-04-29**; remaining Wave 2 (Plans 03, 05) and Wave 2.5 (Plan 03 BIP-39+key hierarchy) unblocked.
-**Active phase:** 02 — Auth + Crypto core (IN PROGRESS, 2/12 plans done)
+**Stage:** IMPLEMENTATION — **Phase 01 CLOSED 2026-04-29**. **Phase 02 IN PROGRESS** — Wave 1 (Plan 01 NestJS 11 upgrade) **DONE 2026-04-29**; Wave 2 Plan 02 (crypto Argon2id+AEAD+calibrate) **DONE 2026-04-29**; Wave 2 Plan 05 (DB schema: users extend + user_sessions + invite_codes) **DONE 2026-04-28**; Wave 2.5 (Plan 03 BIP-39+key hierarchy) and Wave 3 (Plans 04, 06) unblocked.
+**Active phase:** 02 — Auth + Crypto core (IN PROGRESS, 3/12 plans done)
 **Active milestone:** M0 (Foundations)
 **Last commit on planning:** see `git log .planning/`
 
@@ -16,7 +16,7 @@
 | Phase | Status |
 |---|---|
 | 01 — Foundations | **CLOSED 2026-04-29** — all 10 plans complete; security gate PASSED on re-run (gsd-verifier 11/11 + infra-deployment-auditor PASS + dependency-supply-chain-auditor PASS, threat-modeler M0 baseline informational). 9 findings filed, all VERIFIED-CLOSED. Tracked tech debt: two `pnpm.overrides` (multer + lodash) to remove during Phase 02 NestJS 11 upgrade. |
-| 02 — Auth + Crypto core | **IN PROGRESS** — 2/12 plans done. Plan 01 (NestJS 11 upgrade) **DONE 2026-04-29**. Plan 02 (packages/crypto Argon2id + XChaCha20-Poly1305 AEAD + Argon2id calibrate) **DONE 2026-04-29** — TDD, 23 vitest tests across 3 suites, browser bundle parity verified (zero `node:*` imports). Plans 03 + 05 (Wave 2 remainder) and Plan 03 BIP-39 (Wave 2.5) unblocked. |
+| 02 — Auth + Crypto core | **IN PROGRESS** — 3/12 plans done. Plan 01 (NestJS 11 upgrade) **DONE 2026-04-29**. Plan 02 (packages/crypto Argon2id + XChaCha20-Poly1305 AEAD + Argon2id calibrate) **DONE 2026-04-29** — TDD, 23 vitest tests across 3 suites, browser bundle parity verified. Plan 05 (DB schema: users extended to 14 cols + user_sessions + invite_codes; migration 0001 generated and verified e2e on PG 18.3) **DONE 2026-04-28** — see `.planning/phases/02-auth-crypto/02-05-SUMMARY.md` for column contract that 02-06/07/08 must consume + new env vars (SERVER_INVITE_SECRET, SERVER_RECOVERY_HMAC_SECRET) to be added to `.env.example`. Plan 03 BIP-39 (Wave 2.5) and Plans 04, 06 (Wave 3) unblocked. |
 | 03 — 2FA + sessions | PLANNED |
 | 04 — Personal vault: credentials | PLANNED |
 | 05 — Personal vault: pages | PLANNED |
