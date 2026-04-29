@@ -26,6 +26,14 @@ services:
     pids_limit: 200
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - DAC_READ_SEARCH
+      - CHOWN
+      - FOWNER
 
   redis:
     image: redis:7.4-alpine
@@ -44,6 +52,11 @@ services:
     pids_limit: 100
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
 
   api:
     build:
