@@ -6,6 +6,7 @@ export * from "./argon2id.js";
 export * from "./aead.js";
 export * from "./calibrate.js";
 export * from "./bip39.js";
+export * from "./key-hierarchy.js";
 
 const notImplemented = (name: string): never => {
   throw new Error(`@simplevault/crypto browser.${name}() not yet implemented (Phase 02)`);
