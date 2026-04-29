@@ -55,6 +55,9 @@ importers:
       class-validator:
         specifier: ^0.14.1
         version: 0.14.4
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.20.0)
       helmet:
         specifier: ^8.0.0
         version: 8.1.0

@@ -2,8 +2,10 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { LoggerModule } from "nestjs-pino";
 
+import { CryptoModule } from "./crypto/crypto.module.js";
 import { DbModule } from "./db/db.module.js";
 import { HealthModule } from "./health/health.module.js";
+import { InviteModule } from "./invite/invite.module.js";
 import { RedisModule } from "./redis/redis.module.js";
 
 @Module({
@@ -26,6 +28,17 @@ import { RedisModule } from "./redis/redis.module.js";
             "req.body.jwt",
             "req.body.totpCode",
             "req.body.token",
+            // Plan 02-07 signup body — every bytea field is redacted defence-in-depth.
+            "req.body.code",
+            "req.body.argon2SecretKeyHash",
+            "req.body.wrappedMasterDek",
+            "req.body.wrappedMasterDekRecovery",
+            "req.body.wrappedUserSigningSk",
+            "req.body.wrappedUserKxSk",
+            "req.body.userPubKey",
+            "req.body.recoveryInnerHash",
+            "req.body.userArgonSalt",
+            "req.body.serverArgonSalt",
           ],
           censor: "[REDACTED]",
         },
@@ -34,7 +47,9 @@ import { RedisModule } from "./redis/redis.module.js";
     }),
     DbModule,
     RedisModule,
+    CryptoModule,
     HealthModule,
+    InviteModule,
   ],
 })
 export class AppModule {}
