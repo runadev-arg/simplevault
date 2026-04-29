@@ -4,7 +4,11 @@ export default {
   // Drizzle Kit uses CJS-style require and can't resolve our NodeNext `.js`
   // extension imports. Point it directly at the per-table schema modules
   // (skipping the barrel `index.ts`) so it never has to follow `./users.js`.
-  schema: ["./src/schema/users.ts"],
+  schema: [
+    "./src/schema/users.ts",
+    "./src/schema/user_sessions.ts",
+    "./src/schema/invite_codes.ts",
+  ],
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
