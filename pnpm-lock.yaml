@@ -7,6 +7,11 @@ settings:
 overrides:
   lodash@<4.18.0: '>=4.18.1'
 
+patchedDependencies:
+  libsodium-wrappers-sumo@0.7.16:
+    hash: 3gphgfgn2w2rjei3afl4whv2p4
+    path: patches/libsodium-wrappers-sumo@0.7.16.patch
+
 importers:
 
   .:
@@ -112,6 +117,43 @@ importers:
         specifier: ~5.7.0
         version: 5.7.3
 
+  apps/cli:
+    dependencies:
+      '@simplevault/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
+      '@simplevault/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      commander:
+        specifier: ^12.1.0
+        version: 12.1.0
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.20.0)
+      pg:
+        specifier: ^8.13.0
+        version: 8.20.0
+    devDependencies:
+      '@simplevault/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
+      '@simplevault/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.20.0
+      eslint:
+        specifier: ^9.17.0
+        version: 9.39.4(jiti@1.21.7)
+      typescript:
+        specifier: ~5.7.0
+        version: 5.7.3
+
   apps/web:
     dependencies:
       '@simplevault/shared':
@@ -171,7 +213,7 @@ importers:
         version: 3.1.0
       libsodium-wrappers-sumo:
         specifier: ^0.7.15
-        version: 0.7.16
+        version: 0.7.16(patch_hash=3gphgfgn2w2rjei3afl4whv2p4)
     devDependencies:
       '@simplevault/eslint-config':
         specifier: workspace:*
@@ -2210,6 +2252,10 @@ packages:
 
   color-name@1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
+
+  commander@12.1.0:
+    resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
+    engines: {node: '>=18'}
 
   commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
@@ -6103,6 +6149,8 @@ snapshots:
 
   color-name@1.1.4: {}
 
+  commander@12.1.0: {}
+
   commander@2.20.3: {}
 
   commander@4.1.1: {}
@@ -7205,7 +7253,7 @@ snapshots:
 
   libsodium-sumo@0.7.16: {}
 
-  libsodium-wrappers-sumo@0.7.16:
+  libsodium-wrappers-sumo@0.7.16(patch_hash=3gphgfgn2w2rjei3afl4whv2p4):
     dependencies:
       libsodium-sumo: 0.7.16
 

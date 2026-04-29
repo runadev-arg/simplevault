@@ -12,20 +12,25 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "cli": "pnpm --filter @simplevault/cli exec node dist/main.js",
+    "cli:build": "pnpm --filter @simplevault/cli build",
     "db:generate": "pnpm --filter @simplevault/db db:generate",
     "db:migrate": "pnpm --filter @simplevault/db db:migrate",
     "db:studio": "pnpm --filter @simplevault/db db:studio",
     "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {
-    "turbo": "^2.3.0",
-    "typescript": "~5.7.0",
     "@types/node": "^22.0.0",
-    "prettier": "^3.4.0"
+    "prettier": "^3.4.0",
+    "turbo": "^2.3.0",
+    "typescript": "~5.7.0"
   },
   "pnpm": {
     "overrides": {
       "lodash@<4.18.0": ">=4.18.1"
+    },
+    "patchedDependencies": {
+      "libsodium-wrappers-sumo@0.7.16": "patches/libsodium-wrappers-sumo@0.7.16.patch"
     }
   }
 }
