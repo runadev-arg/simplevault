@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { argon2Calibrate } from "./commands/argon2-calibrate.js";
 import { inviteCreate } from "./commands/invite-create.js";
 
 const program = new Command();
@@ -20,6 +21,12 @@ invite
     await inviteCreate(ttl !== undefined ? { email: opts.email, ttlDays: ttl } : { email: opts.email });
   });
 
-// `argon2 calibrate` registered in T2.
+const argon2 = program.command("argon2").description("Argon2id helpers");
+argon2
+  .command("calibrate")
+  .description("Calibrate Argon2id params for this host (target ~750ms)")
+  .action(async () => {
+    await argon2Calibrate();
+  });
 
 await program.parseAsync(process.argv);
