@@ -25,12 +25,28 @@ describe("bip39.validateMnemonic", () => {
     expect(validateMnemonic(generateMnemonic())).toBe(true);
   });
 
-  it("rejects a mnemonic with one mutated word", () => {
+  it("rejects a mnemonic with a non-wordlist word (typo)", () => {
     const m = generateMnemonic();
     const words = m.split(" ");
-    // pick a word distinct from the first
-    words[0] = words[0] === "abandon" ? "ability" : "abandon";
+    words[0] = "notarealbip39word";
     expect(validateMnemonic(words.join(" "))).toBe(false);
+  });
+
+  it("rejects a checksum-broken mnemonic (last word swapped)", () => {
+    // Try multiple regenerations — random mutation can occasionally land on a
+    // checksum-valid alternative for a different entropy. Loop until the
+    // checksum-failure branch is exercised at least once (probability of
+    // 256 consecutive valid landings is astronomical).
+    let sawInvalid = false;
+    for (let i = 0; i < 16 && !sawInvalid; i++) {
+      const m = generateMnemonic();
+      const words = m.split(" ");
+      const last = words[23]!;
+      // Swap last with a deterministic alternative from the wordlist
+      words[23] = last === "zone" ? "zoo" : "zone";
+      if (!validateMnemonic(words.join(" "))) sawInvalid = true;
+    }
+    expect(sawInvalid).toBe(true);
   });
 
   it("rejects a mnemonic with the wrong word count", () => {
