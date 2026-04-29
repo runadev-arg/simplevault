@@ -19,6 +19,8 @@
     "build": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "clean": "rm -rf dist .tsbuildinfo"
   },
   "dependencies": {
@@ -31,6 +33,7 @@
     "@simplevault/tsconfig": "workspace:*",
     "@simplevault/eslint-config": "workspace:*",
     "eslint": "^9.17.0",
-    "typescript": "~5.7.0"
+    "typescript": "~5.7.0",
+    "vitest": "^2.1.8"
   }
 }
