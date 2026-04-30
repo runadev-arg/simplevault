@@ -133,7 +133,7 @@ async function request<T>(
   const headers: Record<string, string> = {};
   if (opts.body !== undefined) headers["content-type"] = "application/json";
   if (opts.accessToken) {
-    headers["authorization"] = `Bearer ${opts.accessToken}`;
+    headers.authorization = `Bearer ${opts.accessToken}`;
   }
   let res: Response;
   try {

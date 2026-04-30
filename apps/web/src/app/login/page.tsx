@@ -1,8 +1,8 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import type { JSX, SyntheticEvent } from "react";
 import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 
 import {
   AuthClientError,
@@ -230,7 +230,7 @@ function LoginPageInner(): JSX.Element {
               inputMode="email"
               autoComplete="username"
               value={email}
-              onChange={(ev) => setEmail(ev.target.value)}
+              onChange={(ev) => { setEmail(ev.target.value); }}
               disabled={busy}
               className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2"
             />
@@ -243,7 +243,7 @@ function LoginPageInner(): JSX.Element {
               type="password"
               autoComplete="current-password"
               value={password}
-              onChange={(ev) => setPassword(ev.target.value)}
+              onChange={(ev) => { setPassword(ev.target.value); }}
               disabled={busy}
               className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2"
             />
@@ -257,7 +257,7 @@ function LoginPageInner(): JSX.Element {
               spellCheck={false}
               autoComplete="off"
               value={secretKeyText}
-              onChange={(ev) => setSecretKeyText(ev.target.value)}
+              onChange={(ev) => { setSecretKeyText(ev.target.value); }}
               disabled={busy}
               placeholder="K3JM-9PXQ-7T4N-22HS-VR8E-A6YF"
               className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 font-mono"

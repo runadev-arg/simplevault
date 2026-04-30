@@ -14,7 +14,7 @@
  */
 
 let _accessToken: string | null = null;
-let _expiresAt: number = 0;
+let _expiresAt = 0;
 
 type Listener = () => void;
 const _listeners = new Set<Listener>();

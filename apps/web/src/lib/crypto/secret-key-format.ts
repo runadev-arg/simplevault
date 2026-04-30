@@ -57,7 +57,7 @@ export function crockfordToBytes(s: string): Uint8Array {
   const norm = normaliseCrockford(s);
   if (norm.length !== 26) {
     throw new SecretKeyFormatError(
-      `Secret key must be 26 base32 characters (got ${norm.length} after normalisation).`,
+      `Secret key must be 26 base32 characters (got ${String(norm.length)} after normalisation).`,
     );
   }
   let bits = 0;
