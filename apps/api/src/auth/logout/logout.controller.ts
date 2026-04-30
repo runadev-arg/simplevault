@@ -1,6 +1,9 @@
 import { Controller, HttpCode, HttpStatus, Logger, Post, Req, Res } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 
+import { AuditAction, AuditEventService } from "../../common/audit-events.js";
+import { RateLimits } from "../../common/throttler.config.js";
 import { SessionService } from "../sessions/session.service.js";
 
 const REFRESH_COOKIE = "__Host-refresh";
@@ -12,6 +15,7 @@ export class LogoutController {
 
   @Post("logout")
   @HttpCode(HttpStatus.OK)
+  @Throttle({ [RateLimits.logoutIp.name]: { limit: RateLimits.logoutIp.limit, ttl: RateLimits.logoutIp.ttl } })
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<unknown> {
     const cookieHeader = req.headers.cookie ?? "";
     const raw = parseCookie(cookieHeader, REFRESH_COOKIE);
@@ -31,12 +35,21 @@ export class LogoutController {
     });
 
     if (revoked) {
-      this.logger.log(
-        { evt: "auth.logout", user_id: revoked.userId, family_id: revoked.familyId },
-        "auth.logout",
-      );
+      AuditEventService.emit(this.logger, {
+        action: AuditAction.Logout,
+        actorUserId: revoked.userId,
+        targetId: revoked.userId,
+        outcome: "ok",
+        data: { familyId: revoked.familyId },
+      });
     } else {
-      this.logger.log({ evt: "auth.logout", reason: "no_session" }, "auth.logout");
+      AuditEventService.emit(this.logger, {
+        action: AuditAction.Logout,
+        actorUserId: null,
+        targetId: null,
+        outcome: "ok",
+        reason: "no_session",
+      });
     }
     return { ok: true };
   }

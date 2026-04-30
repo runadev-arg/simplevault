@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { schema } from "@simplevault/db";
 import { sql } from "drizzle-orm";
 
+import { AuditAction, AuditEventService } from "../../common/audit-events.js";
 import { constantTimeEqual32, dummyHash } from "../../common/timing-floor.js";
 import { DbService } from "../../db/db.service.js";
 import { JwtService } from "../jwt/jwt.service.js";
@@ -76,14 +77,8 @@ export class LoginService {
     const match = constantTimeEqual32(candidate, verifier);
 
     if (!user || !match) {
-      this.logger.warn(
-        {
-          evt: "auth.login.fail",
-          reason: !user ? "no_user" : "bad_verifier",
-          email_present: input.email.length > 0,
-        },
-        "auth.login.fail",
-      );
+      // Failure log emitted by the controller (it has ip + ua context); the
+      // service stays mute on failure to keep log lines from doubling.
       return null;
     }
 
@@ -95,16 +90,15 @@ export class LoginService {
       fam: refresh.familyId,
     });
 
-    this.logger.log(
-      {
-        evt: "auth.login.ok",
-        user_id: user.id,
-        family_id: refresh.familyId,
-        ip_hash_b64: this.sessions.hashIp(ip).toString("base64"),
-        ua_family: this.sessions.parseUaFamily(ua),
-      },
-      "auth.login.ok",
-    );
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.LoginOk,
+      actorUserId: user.id,
+      targetId: user.id,
+      outcome: "ok",
+      ipHashB64: this.sessions.hashIp(ip).toString("base64"),
+      uaFamily: this.sessions.parseUaFamily(ua),
+      data: { familyId: refresh.familyId },
+    });
 
     const body: LoginResponseBody = {
       accessToken,

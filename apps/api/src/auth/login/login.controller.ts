@@ -6,14 +6,17 @@ import {
   HttpCode,
   HttpStatus,
   HttpException,
+  Logger,
   Post,
   Req,
   Res,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { ErrorCodes } from "@simplevault/shared/errors";
 import type { Request, Response } from "express";
 
-import { clientIpKey, FixedWindowRateLimiter } from "../../common/rate-limit.js";
+import { AuditAction, AuditEventService } from "../../common/audit-events.js";
+import { RateLimits } from "../../common/throttler.config.js";
 import { CryptoService } from "../../crypto/crypto.service.js";
 import { SessionService } from "../sessions/session.service.js";
 
@@ -24,18 +27,7 @@ const REFRESH_COOKIE = "__Host-refresh";
 
 @Controller("auth")
 export class LoginController {
-  // REQ-RATELIMIT-002: 5 / IP / 15min AND 10 / email / 15min sliding window.
-  // 02-09 swaps for @nestjs/throttler+Redis.
-  private readonly limiterIp = new FixedWindowRateLimiter(
-    "auth.login.ip",
-    Number.parseInt(process.env.LOGIN_IP_RATE_LIMIT ?? "5", 10) || 5,
-    15 * 60 * 1000,
-  );
-  private readonly limiterEmail = new FixedWindowRateLimiter(
-    "auth.login.email",
-    Number.parseInt(process.env.LOGIN_EMAIL_RATE_LIMIT ?? "10", 10) || 10,
-    15 * 60 * 1000,
-  );
+  private readonly logger = new Logger(LoginController.name);
 
   constructor(
     private readonly loginSvc: LoginService,
@@ -45,20 +37,22 @@ export class LoginController {
 
   /**
    * Public — returns the GLOBAL Argon2id params the client uses to compute
-   * the login verifier. No per-user salt here (anti-enumeration). The
-   * per-user `server_argon_salt` is returned in the 200 login response so
-   * only a successful auth gets it.
+   * the login verifier. No per-user salt here (anti-enumeration).
    */
   @Get("params")
+  @Throttle({ [RateLimits.authParamsIp.name]: { limit: RateLimits.authParamsIp.limit, ttl: RateLimits.authParamsIp.ttl } })
   params(): { argon2Params: { memoryKiB: number; iterations: number; parallelism: 1 } } {
     return { argon2Params: this.crypto.argon2Params() };
   }
 
   @Post("login")
   @HttpCode(HttpStatus.OK)
+  // Both IP and email keyed — REQ-RATELIMIT-002.
+  @Throttle({
+    [RateLimits.loginIp.name]: { limit: RateLimits.loginIp.limit, ttl: RateLimits.loginIp.ttl },
+    [RateLimits.loginEmail.name]: { limit: RateLimits.loginEmail.limit, ttl: RateLimits.loginEmail.ttl },
+  })
   async login(@Body() body: unknown, @Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<unknown> {
-    this.limiterIp.consume(clientIpKey(req));
-
     const parsed = LoginSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException({
@@ -66,13 +60,19 @@ export class LoginController {
       });
     }
 
-    // Per-email limiter — coarse keyed by lower(email) (already normalised by Zod).
-    this.limiterEmail.consume(`em:${parsed.data.email}`);
-
-    const ip = clientIpKey(req);
+    const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
     const ua = req.headers["user-agent"];
     const result = await this.loginSvc.login(parsed.data, ip, typeof ua === "string" ? ua : undefined);
     if (!result) {
+      AuditEventService.emit(this.logger, {
+        action: AuditAction.LoginFail,
+        actorUserId: null,
+        targetId: null,
+        outcome: "fail",
+        reason: "invalid_credentials",
+        ipHashB64: this.sessions.hashIp(ip).toString("base64"),
+        uaFamily: this.sessions.parseUaFamily(typeof ua === "string" ? ua : undefined),
+      });
       throw new HttpException(
         { error: { code: ErrorCodes.AUTH_INVALID_CREDENTIALS, message: "Invalid credentials" } },
         HttpStatus.UNAUTHORIZED,

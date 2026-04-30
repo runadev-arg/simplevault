@@ -3,6 +3,7 @@ import { schema } from "@simplevault/db";
 import { ErrorCodes } from "@simplevault/shared/errors";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
+import { AuditAction, AuditEventService } from "../../common/audit-events.js";
 import { CryptoService } from "../../crypto/crypto.service.js";
 import { DbService } from "../../db/db.service.js";
 
@@ -34,10 +35,14 @@ export class SignupService {
   async signup(input: SignupDto): Promise<SignupResponse> {
     // KDF-downgrade defence: enforced server-side, not trusted from the client.
     if (!this.crypto.validateArgon2ParamsAboveFloor(input.argon2Params)) {
-      this.logger.warn(
-        { evt: "auth.signup.fail", reason: "kdf_downgrade", invite_id: input.inviteId },
-        "signup fail",
-      );
+      AuditEventService.emit(this.logger, {
+        action: AuditAction.SignupFail,
+        actorUserId: null,
+        targetId: null,
+        outcome: "fail",
+        reason: "kdf_downgrade",
+        data: { inviteId: input.inviteId },
+      });
       throw new HttpException(
         { error: { code: ErrorCodes.VALIDATION_FAILED, message: "Invalid request body" } },
         HttpStatus.BAD_REQUEST,
@@ -126,10 +131,13 @@ export class SignupService {
       // with the pg error on `.cause`; check both.
       const pgCode = pickPgCode(err);
       if (pgCode === "23505") {
-        this.logger.warn(
-          { evt: "auth.signup.fail", reason: "duplicate_email", code: ErrorCodes.AUTH_SIGNUP_DUPLICATE_EMAIL },
-          "signup fail",
-        );
+        AuditEventService.emit(this.logger, {
+          action: AuditAction.SignupFail,
+          actorUserId: null,
+          targetId: null,
+          outcome: "fail",
+          reason: "duplicate_email",
+        });
         throw new HttpException(
           { error: { code: ErrorCodes.AUTH_INVITE_INVALID, message: "Invalid invite" } },
           HttpStatus.BAD_REQUEST,
@@ -150,19 +158,26 @@ export class SignupService {
       );
     }
 
-    this.logger.log(
-      { evt: "signup", user_id: userId, email, ts: createdAt.toISOString() },
-      "signup ok",
-    );
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.SignupOk,
+      actorUserId: userId,
+      targetId: userId,
+      outcome: "ok",
+      ts: createdAt.toISOString(),
+    });
 
     return { userId, email, createdAt: createdAt.toISOString() };
   }
 
   private failInvalid(reason: string, inviteId: string): never {
-    this.logger.warn(
-      { evt: "auth.signup.fail", reason, invite_id: inviteId, code: ErrorCodes.AUTH_INVITE_INVALID },
-      "signup fail",
-    );
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.SignupFail,
+      actorUserId: null,
+      targetId: null,
+      outcome: "fail",
+      reason,
+      data: { inviteId },
+    });
     throw new HttpException(
       { error: { code: ErrorCodes.AUTH_INVITE_INVALID, message: "Invalid invite" } },
       HttpStatus.BAD_REQUEST,

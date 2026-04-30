@@ -3,6 +3,7 @@ import { schema } from "@simplevault/db";
 import { ErrorCodes } from "@simplevault/shared/errors";
 import { eq } from "drizzle-orm";
 
+import { AuditAction, AuditEventService } from "../common/audit-events.js";
 import { CryptoService } from "../crypto/crypto.service.js";
 import { DbService } from "../db/db.service.js";
 
@@ -40,29 +41,25 @@ export class InviteService {
 
     const row = rows[0];
     if (!row) {
-      this.logger.warn({ evt: "invite.redeem.fail", reason: "not_found" }, "invite redeem fail");
-      this.throwInvalid();
+      this.failRedeem("not_found", null);
     }
     const now = new Date();
     if (row.expiresAt <= now) {
-      this.logger.warn(
-        { evt: "invite.redeem.fail", reason: "expired", invite_id: row.id },
-        "invite redeem fail",
-      );
-      this.throwInvalid();
+      this.failRedeem("expired", row.id);
     }
     if (row.redeemedAt !== null) {
-      this.logger.warn(
-        { evt: "invite.redeem.fail", reason: "already_redeemed", invite_id: row.id },
-        "invite redeem fail",
-      );
-      this.throwInvalid();
+      this.failRedeem("already_redeemed", row.id);
     }
 
     const params = this.crypto.argon2Params();
     const serverArgonSalt = this.crypto.defaultServerArgonSalt();
 
-    this.logger.log({ evt: "invite.redeem.ok", invite_id: row.id }, "invite redeem ok");
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.InviteRedeemOk,
+      actorUserId: null,
+      targetId: row.id,
+      outcome: "ok",
+    });
 
     return {
       inviteId: row.id,
@@ -72,7 +69,14 @@ export class InviteService {
     };
   }
 
-  private throwInvalid(): never {
+  private failRedeem(reason: string, inviteId: string | null): never {
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.InviteRedeemFail,
+      actorUserId: null,
+      targetId: inviteId,
+      outcome: "fail",
+      reason,
+    });
     throw new HttpException(
       {
         error: { code: ErrorCodes.AUTH_INVITE_INVALID, message: "Invalid invite" },

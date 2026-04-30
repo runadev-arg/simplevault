@@ -1,24 +1,21 @@
-import { BadRequestException, Body, Controller, HttpCode, HttpStatus, Post, Req } from "@nestjs/common";
+import { BadRequestException, Body, Controller, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { ErrorCodes } from "@simplevault/shared/errors";
-import type { Request } from "express";
 
-import { clientIpKey, FixedWindowRateLimiter } from "../common/rate-limit.js";
+import { RateLimits } from "../common/throttler.config.js";
 
 import { InviteRedeemSchema } from "./invite.dto.js";
 import { InviteService } from "./invite.service.js";
 
 @Controller("invite")
 export class InviteController {
-  // 30 / IP / hour (lookup is cheap; advisory ceiling against scraping).
-  private readonly limiter = new FixedWindowRateLimiter("invite.redeem", 30, 60 * 60 * 1000);
-
   constructor(private readonly invites: InviteService) {}
 
   @Post("redeem")
   @HttpCode(HttpStatus.OK)
-  async redeem(@Body() body: unknown, @Req() req: Request): Promise<unknown> {
-    this.limiter.consume(clientIpKey(req));
-
+  // 30 / IP / hour — lookup is cheap; advisory ceiling against scraping.
+  @Throttle({ [RateLimits.inviteRedeemIp.name]: { limit: RateLimits.inviteRedeemIp.limit, ttl: RateLimits.inviteRedeemIp.ttl } })
+  async redeem(@Body() body: unknown): Promise<unknown> {
     const parsed = InviteRedeemSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException({

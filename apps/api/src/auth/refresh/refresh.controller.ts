@@ -1,7 +1,9 @@
 import { Controller, HttpCode, HttpStatus, Logger, Post, Req, Res } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 
-import { clientIpKey, FixedWindowRateLimiter } from "../../common/rate-limit.js";
+import { AuditAction, AuditEventService } from "../../common/audit-events.js";
+import { RateLimits } from "../../common/throttler.config.js";
 import { JwtService } from "../jwt/jwt.service.js";
 import { SessionService } from "../sessions/session.service.js";
 
@@ -10,12 +12,6 @@ const REFRESH_COOKIE = "__Host-refresh";
 @Controller("auth")
 export class RefreshController {
   private readonly logger = new Logger(RefreshController.name);
-  // 30 / IP / 15min — generous, legitimate clients refresh ~every 15min.
-  private readonly limiter = new FixedWindowRateLimiter(
-    "auth.refresh.ip",
-    Number.parseInt(process.env.REFRESH_IP_RATE_LIMIT ?? "30", 10) || 30,
-    15 * 60 * 1000,
-  );
 
   constructor(
     private readonly sessions: SessionService,
@@ -24,34 +20,53 @@ export class RefreshController {
 
   @Post("refresh")
   @HttpCode(HttpStatus.OK)
+  @Throttle({ [RateLimits.refreshIp.name]: { limit: RateLimits.refreshIp.limit, ttl: RateLimits.refreshIp.ttl } })
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<unknown> {
-    this.limiter.consume(clientIpKey(req));
-
     const cookieHeader = req.headers.cookie ?? "";
     const raw = parseCookie(cookieHeader, REFRESH_COOKIE);
+    const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
+    const ua = req.headers["user-agent"];
+    const ipHashB64 = this.sessions.hashIp(ip).toString("base64");
+    const uaFamily = this.sessions.parseUaFamily(typeof ua === "string" ? ua : undefined);
+
     if (!raw) {
-      this.logger.warn({ evt: "auth.refresh.fail", reason: "no_cookie" }, "auth.refresh.fail");
+      AuditEventService.emit(this.logger, {
+        action: AuditAction.RefreshFail,
+        actorUserId: null,
+        targetId: null,
+        outcome: "fail",
+        reason: "no_cookie",
+        ipHashB64,
+        uaFamily,
+      });
       SessionService.throw401();
     }
 
-    const ip = clientIpKey(req);
-    const ua = req.headers["user-agent"];
     const result = await this.sessions.rotate(raw, ip, typeof ua === "string" ? ua : undefined);
 
     if (result.kind === "invalid") {
-      this.logger.warn({ evt: "auth.refresh.fail", reason: "invalid" }, "auth.refresh.fail");
+      AuditEventService.emit(this.logger, {
+        action: AuditAction.RefreshFail,
+        actorUserId: null,
+        targetId: null,
+        outcome: "fail",
+        reason: "invalid",
+        ipHashB64,
+        uaFamily,
+      });
       SessionService.throw401();
     }
     if (result.kind === "reuse") {
-      this.logger.warn(
-        {
-          evt: "auth.refresh.reuse_detected",
-          user_id: result.userId,
-          family_id: result.familyId,
-          ip_hash_b64: this.sessions.hashIp(ip).toString("base64"),
-        },
-        "auth.refresh.reuse_detected",
-      );
+      AuditEventService.emit(this.logger, {
+        action: AuditAction.RefreshReuseDetected,
+        actorUserId: result.userId,
+        targetId: result.userId,
+        outcome: "fail",
+        reason: "reuse_detected",
+        ipHashB64,
+        uaFamily,
+        data: { familyId: result.familyId },
+      });
       SessionService.throwReused();
     }
 
@@ -70,10 +85,15 @@ export class RefreshController {
       maxAge: this.sessions.refreshTtlSeconds() * 1000,
     });
 
-    this.logger.log(
-      { evt: "auth.refresh.ok", user_id: next.userId, family_id: next.familyId },
-      "auth.refresh.ok",
-    );
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.RefreshOk,
+      actorUserId: next.userId,
+      targetId: next.userId,
+      outcome: "ok",
+      ipHashB64,
+      uaFamily,
+      data: { familyId: next.familyId },
+    });
 
     return {
       accessToken,
