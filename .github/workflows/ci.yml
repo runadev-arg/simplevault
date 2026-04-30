@@ -66,3 +66,170 @@ jobs:
 
       - name: pnpm audit (high+)
         run: pnpm audit --audit-level=high
+
+  e2e:
+    # Phase-02 end-to-end: invite -> /signup wizard -> /me -> logout ->
+    # /login -> sad paths -> rate-limit smoke. The full happy path drives
+    # libsodium + Argon2id (test floor params) in a real Chromium.
+    name: e2e (cypress · invite -> signup -> /me -> logout -> login -> sad)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: ci
+    # Path-filter: only run on PRs that touch app/package code (mirrors
+    # container-scan.yml). Skips docs-only PRs to save CI minutes.
+    if: |
+      github.event_name == 'push' ||
+      contains(github.event.pull_request.changed_files, 'apps/') ||
+      contains(github.event.pull_request.changed_files, 'packages/') ||
+      contains(github.event.pull_request.changed_files, '.github/workflows/')
+    services:
+      postgres:
+        image: postgres:18.3-alpine
+        env:
+          POSTGRES_USER: simplevault
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: simplevault
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U simplevault -d simplevault"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 8
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://simplevault:ci_password@localhost:5432/simplevault
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      PORT: 3001
+      # Crypto secrets — random, ephemeral, per-run.
+      JWT_SECRET: ci_jwt_secret_must_be_at_least_32_bytes_long_aaaaaaa
+      SERVER_INVITE_SECRET: ci_invite_secret_must_be_at_least_32_bytes_long
+      SERVER_RECOVERY_HMAC_SECRET: ci_recovery_hmac_must_be_at_least_32_bytes_long
+      SERVER_ARGON_SALT: Y2lfYXJnb25fc2FsdF8xNkI=
+      SERVER_IP_HASH_SECRET: ci_ip_hash_secret_must_be_at_least_32_bytes_long
+      SERVER_CHAIN_SECRET: ci_chain_secret_must_be_at_least_32_bytes_long_x
+      ACCESS_TOKEN_TTL: 900
+      REFRESH_TOKEN_TTL: 2592000
+      # Test floor: minimum-viable Argon2id so the wizard finishes in a
+      # CI-reasonable time. Operators run `pnpm cli argon2 calibrate` for
+      # production tuning — see SECURITY-NOTES.md.
+      ARGON2_MEMORY_KIB: 19456
+      ARGON2_ITERATIONS: 2
+      ARGON2_PARALLELISM: 1
+      CORS_ORIGINS: http://localhost:3000
+      LOG_LEVEL: warn
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Install psql client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Setup Node 22
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+        with:
+          version: 9.15.0
+          run_install: false
+
+      - name: Get pnpm store dir
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - name: Restore pnpm store cache
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Cypress binary cache
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: cypress-${{ runner.os }}-
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (production parity)
+        run: pnpm build
+
+      - name: Run DB migrations
+        run: pnpm db:migrate
+
+      - name: Start API (background)
+        run: |
+          (pnpm --filter @simplevault/api start &) > /tmp/api.log 2>&1 || true
+          # Poll /health until ready (max 60s).
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3001/health > /dev/null; then
+              echo "API ready in ${i}x2s"
+              break
+            fi
+            sleep 2
+          done
+          curl -sf http://localhost:3001/health || (echo "API failed to start" && tail -100 /tmp/api.log && exit 1)
+
+      - name: Start Web (background)
+        run: |
+          (pnpm --filter @simplevault/web start &) > /tmp/web.log 2>&1 || true
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/login > /dev/null; then
+              echo "Web ready in ${i}x2s"
+              break
+            fi
+            sleep 2
+          done
+          curl -sf http://localhost:3000/login > /dev/null || (echo "Web failed to start" && tail -100 /tmp/web.log && exit 1)
+
+      - name: Run Cypress E2E
+        run: pnpm --filter @simplevault/web cypress:run
+
+      - name: Upload Cypress screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf2892d2674acef5b05c # v4.4.3
+        with:
+          name: cypress-screenshots
+          path: apps/web/cypress/screenshots
+          if-no-files-found: ignore
+
+      - name: Upload Cypress videos on failure
+        if: failure()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf2892d2674acef5b05c # v4.4.3
+        with:
+          name: cypress-videos
+          path: apps/web/cypress/videos
+          if-no-files-found: ignore
+
+      - name: Upload server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf2892d2674acef5b05c # v4.4.3
+        with:
+          name: server-logs
+          path: |
+            /tmp/api.log
+            /tmp/web.log
+          if-no-files-found: ignore
