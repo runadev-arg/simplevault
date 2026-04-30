@@ -91,6 +91,45 @@ If the operator account should require stricter rules than regular users
 (e.g. mandatory hardware key, no TOTP-only fallback), decide before Phase 14 —
 it's a roadmap-open question.
 
+## Argon2id calibration (one-time, before production cutover)
+
+**Why:** per-deployment calibration ensures Argon2id wall time stays in
+the **500–1000 ms** band on the actual production hardware (per
+CRYPTO-STACK.md §2). The Phase-02 default fallback values
+(`ARGON2_MEMORY_KIB=65536`, `ARGON2_ITERATIONS=3`, `ARGON2_PARALLELISM=1`)
+are conservative — on a small VPS they may run too slowly and degrade
+login UX; on a beefy box they may be weaker than the host can afford.
+Calibration is per-hardware: if you migrate VPS, **re-run**.
+
+**How:**
+
+1. SSH to the Dokploy host.
+2. Exec the CLI inside the api container:
+   ```bash
+   docker exec -it <api-container> simplevault-cli argon2 calibrate
+   ```
+   (or, equivalently, `pnpm cli argon2 calibrate` from a dev checkout
+   on the same host).
+3. The CLI prints a target trio, e.g.:
+   ```
+   ARGON2_MEMORY_KIB=131072
+   ARGON2_ITERATIONS=3
+   ARGON2_PARALLELISM=1
+   # wall time: ~720ms on this host
+   ```
+4. Paste those three lines into Dokploy's encrypted env-var UI for the
+   `simplevault-api` service. Web does not consume these directly —
+   the api returns the active params via `GET /auth/params` which the
+   web wizard + login page read at runtime.
+5. Redeploy the api service in Dokploy. Existing user records are NOT
+   re-derived (they keep the params snapshotted at signup); new
+   signups + future password rotations use the new values.
+
+**Lower-bound floor:** values below
+`ARGON2_MEMORY_KIB=19456, ARGON2_ITERATIONS=2, ARGON2_PARALLELISM=1`
+(OWASP 2024 minimum) mean the host is too underpowered for production —
+either pick a bigger VPS or accept a weaker security posture explicitly.
+
 ## Periodic operator tasks
 
 - **Weekly** — review `pnpm audit` Dependabot PRs; merge or document a
