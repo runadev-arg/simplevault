@@ -41,8 +41,20 @@ export class LoginController {
    */
   @Get("params")
   @Throttle({ [RateLimits.authParamsIp.name]: { limit: RateLimits.authParamsIp.limit, ttl: RateLimits.authParamsIp.ttl } })
-  params(): { argon2Params: { memoryKiB: number; iterations: number; parallelism: 1 } } {
-    return { argon2Params: this.crypto.argon2Params() };
+  params(): {
+    argon2Params: { memoryKiB: number; iterations: number; parallelism: 1 };
+    serverArgonSalt: string;
+  } {
+    // The client needs `serverArgonSalt` to compute `argon2_secret_key_hash`
+    // BEFORE it has authenticated (chicken-and-egg). We expose the GLOBAL
+    // server-argon-salt here. Per CRYPTO-STACK §2 + the planner's anti-
+    // enumeration design (02-INDEX), the salt is a public-by-convention
+    // operator-managed value (akin to a server-wide pepper in plain Argon2id
+    // password schemes). It does NOT leak per-user existence.
+    return {
+      argon2Params: this.crypto.argon2Params(),
+      serverArgonSalt: this.crypto.defaultServerArgonSalt().toString("base64"),
+    };
   }
 
   @Post("login")
