@@ -38,6 +38,7 @@ const SHARED_EXPECTED = [
   "encodeAad",
   "encrypt",
   "generateKxKeyPair",
+  "generateSigningKeyPair",
   "paramsToOpsMem",
   "ready",
   "sealedBoxOpen",

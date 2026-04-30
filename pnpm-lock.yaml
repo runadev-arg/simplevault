@@ -168,9 +168,15 @@ importers:
 
   apps/web:
     dependencies:
+      '@simplevault/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@simplevault/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      libsodium-wrappers-sumo:
+        specifier: ^0.7.15
+        version: 0.7.16(patch_hash=3gphgfgn2w2rjei3afl4whv2p4)
       next:
         specifier: ^15.5.15
         version: 15.5.15(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
@@ -180,6 +186,9 @@ importers:
       react-dom:
         specifier: 19.0.0
         version: 19.0.0(react@19.0.0)
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
     devDependencies:
       '@simplevault/eslint-config':
         specifier: workspace:*
@@ -187,6 +196,9 @@ importers:
       '@simplevault/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig
+      '@types/libsodium-wrappers-sumo':
+        specifier: ^0.7.0
+        version: 0.7.8
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17

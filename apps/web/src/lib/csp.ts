@@ -1,11 +1,27 @@
 export function buildCsp(nonce: string): string {
+  // Allow XHR/fetch to the API origin (configured via NEXT_PUBLIC_API_URL).
+  // Falls back to same-origin only.
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+  const apiOrigin = (() => {
+    try {
+      return apiUrl ? new URL(apiUrl).origin : "";
+    } catch {
+      return "";
+    }
+  })();
+  const connectSrc = ["'self'"];
+  if (apiOrigin && apiOrigin !== "null") connectSrc.push(apiOrigin);
+
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
-    "script-src": ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"],
+    // 'wasm-unsafe-eval' is required for libsodium-wrappers-sumo (WASM
+    // compiled at runtime from the bundled .wasm). Does NOT relax JS eval.
+    "script-src": ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", "'wasm-unsafe-eval'"],
+    "script-src-elem": ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"],
     "style-src": ["'self'", `'nonce-${nonce}'`],
     "img-src": ["'self'", "data:", "blob:"],
     "font-src": ["'self'"],
-    "connect-src": ["'self'"],
+    "connect-src": connectSrc,
     "form-action": ["'self'"],
     "frame-ancestors": ["'none'"],
     "frame-src": ["'none'"],

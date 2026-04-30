@@ -10,6 +10,7 @@ export * from "./calibrate.js";
 export * from "./bip39.js";
 export * from "./key-hierarchy.js";
 export * from "./sealed-box.js";
+export * from "./sign.js";
 
 const notImplemented = (name: string): never => {
   throw new Error(`@simplevault/crypto browser.${name}() not yet implemented (Phase 02)`);

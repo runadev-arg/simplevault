@@ -79,6 +79,9 @@ export {
 } from "./sealed-box.js";
 export type { KxKeyPair } from "./sealed-box.js";
 
+export { generateSigningKeyPair } from "./sign.js";
+export type { SigningKeyPair } from "./sign.js";
+
 const notImplemented = (name: string): never => {
   throw new Error(`@simplevault/crypto node.${name}() not yet implemented (Phase 02)`);
 };
