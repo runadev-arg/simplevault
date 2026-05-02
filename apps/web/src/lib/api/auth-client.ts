@@ -79,7 +79,6 @@ const ErrorEnvelopeSchema = z.object({
   error: z.object({
     code: z.string(),
     message: z.string(),
-    requestId: z.union([z.string(), z.number()]).optional(),
   }),
 });
 
@@ -155,6 +154,7 @@ async function request<T>(
   }
 
   if (!res.ok) {
+    const headerRequestId = res.headers.get("x-request-id") ?? undefined;
     const env = ErrorEnvelopeSchema.safeParse(parsedBody);
     if (env.success) {
       const errOpts: ConstructorParameters<typeof AuthClientError>[0] = {
@@ -162,8 +162,8 @@ async function request<T>(
         message: env.data.error.message,
         status: res.status,
       };
-      if (env.data.error.requestId !== undefined) {
-        errOpts.requestId = env.data.error.requestId;
+      if (headerRequestId !== undefined) {
+        errOpts.requestId = headerRequestId;
       }
       throw new AuthClientError(errOpts);
     }
@@ -171,6 +171,7 @@ async function request<T>(
       code: "E5001",
       message: `Request failed: ${String(res.status)}`,
       status: res.status,
+      ...(headerRequestId !== undefined ? { requestId: headerRequestId } : {}),
     });
   }
 
@@ -213,15 +214,16 @@ async function postJson<T>(
   }
 
   if (!res.ok) {
+    const headerRequestId = res.headers.get("x-request-id") ?? undefined;
     const env = ErrorEnvelopeSchema.safeParse(parsedBody);
     if (env.success) {
-        const opts: ConstructorParameters<typeof AuthClientError>[0] = {
+      const opts: ConstructorParameters<typeof AuthClientError>[0] = {
         code: env.data.error.code,
         message: env.data.error.message,
         status: res.status,
       };
-      if (env.data.error.requestId !== undefined) {
-        opts.requestId = env.data.error.requestId;
+      if (headerRequestId !== undefined) {
+        opts.requestId = headerRequestId;
       }
       throw new AuthClientError(opts);
     }
@@ -229,6 +231,7 @@ async function postJson<T>(
       code: "E5001",
       message: `Request failed: ${String(res.status)}`,
       status: res.status,
+      ...(headerRequestId !== undefined ? { requestId: headerRequestId } : {}),
     });
   }
 

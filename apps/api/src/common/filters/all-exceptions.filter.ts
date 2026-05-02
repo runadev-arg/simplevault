@@ -55,6 +55,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.error({ requestId, err: exception }, "unhandled exception");
     }
 
-    res.status(status).json({ error: { code, message, requestId } });
+    res.setHeader("X-Request-Id", requestId);
+    res.status(status).json({ error: { code, message } });
   }
 }
