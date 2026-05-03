@@ -5,6 +5,11 @@ import { DbModule } from "../db/db.module.js";
 
 import { MethodsController } from "./methods/methods.controller.js";
 import { MethodsService } from "./methods/methods.service.js";
+import {
+  DbBackedRequire2FACountReader,
+  REQUIRE_2FA_COUNT_READER,
+  Require2FAGuard,
+} from "./require-2fa.guard.js";
 import { StepUpJwtService } from "./step-up/step-up-jwt.service.js";
 import { Require2FAStepUpGuard } from "./step-up/step-up.guard.js";
 import { TotpController } from "./totp/totp.controller.js";
@@ -45,6 +50,9 @@ import { WebauthnRegisterService } from "./webauthn/webauthn-register.service.js
     WebauthnAuthService,
     TotpService,
     MethodsService,
+    DbBackedRequire2FACountReader,
+    { provide: REQUIRE_2FA_COUNT_READER, useExisting: DbBackedRequire2FACountReader },
+    Require2FAGuard,
   ],
   exports: [
     StepUpJwtService,
@@ -53,6 +61,8 @@ import { WebauthnRegisterService } from "./webauthn/webauthn-register.service.js
     WebauthnAuthService,
     TotpService,
     MethodsService,
+    Require2FAGuard,
+    REQUIRE_2FA_COUNT_READER,
   ],
 })
 export class TwoFaModule {}

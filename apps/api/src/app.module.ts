@@ -13,6 +13,7 @@ import { MeModule } from "./me/me.module.js";
 import { RedisModule } from "./redis/redis.module.js";
 import { SessionsModule } from "./sessions/sessions.module.js";
 import { TwoFaModule } from "./twofa/twofa.module.js";
+import { VaultProbeModule } from "./vault/vault-probe.module.js";
 
 /**
  * Pino redaction list — comprehensive enumeration of every sensitive field
@@ -146,6 +147,12 @@ const PINO_REDACT_PATHS = [
     // revoke-all). Distinct from `auth/sessions/SessionService` which is the
     // refresh-rotation primitive; this module is the controller surface.
     SessionsModule,
+    // Phase 03 Plan 07 — gated probe route for the Require2FAGuard.
+    // INDEX Key Link 8: registered IFF EXPOSE_TEST_ROUTES === "1". Production
+    // builds leave this unset → VaultProbeModule is not imported → the
+    // `POST /vault/_2fa-guard-probe` route is absent from the router. Phase 07
+    // deletes both this conditional spread and the module as its first commit.
+    ...(process.env.EXPOSE_TEST_ROUTES === "1" ? [VaultProbeModule] : []),
   ],
   providers: [{ provide: APP_GUARD, useClass: SimpleVaultThrottlerGuard }],
 })
