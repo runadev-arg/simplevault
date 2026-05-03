@@ -40,6 +40,10 @@ export const AuditAction = {
   TwoFaTotpRegisterFail: "auth.2fa.totp.register.fail",
   TwoFaTotpVerifyOk: "auth.2fa.totp.verify.ok",
   TwoFaTotpVerifyFail: "auth.2fa.totp.verify.fail",
+  // Phase 03-06 — 2FA method management (Truth 10).
+  // `data.kind` = "webauthn" | "totp" so the operator dashboard can
+  // partition removals by authenticator type without re-querying.
+  TwoFaMethodRemoved: "auth.2fa.method.removed",
   // Phase 03-05 — sessions API (Truths 12, 13). Both events follow the
   // `auth.<verb>.<outcome>` namespace established by Phase-02 events; targetId
   // is the sessionId (revoked) or userId (revoke_all).

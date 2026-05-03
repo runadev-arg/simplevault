@@ -3,6 +3,8 @@ import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
 import { DbModule } from "../db/db.module.js";
 
+import { MethodsController } from "./methods/methods.controller.js";
+import { MethodsService } from "./methods/methods.service.js";
 import { StepUpJwtService } from "./step-up/step-up-jwt.service.js";
 import { Require2FAStepUpGuard } from "./step-up/step-up.guard.js";
 import { TotpController } from "./totp/totp.controller.js";
@@ -30,13 +32,19 @@ import { WebauthnRegisterService } from "./webauthn/webauthn-register.service.js
  */
 @Module({
   imports: [AuthModule, DbModule],
-  controllers: [WebauthnRegisterController, WebauthnAuthController, TotpController],
+  controllers: [
+    WebauthnRegisterController,
+    WebauthnAuthController,
+    TotpController,
+    MethodsController,
+  ],
   providers: [
     StepUpJwtService,
     Require2FAStepUpGuard,
     WebauthnRegisterService,
     WebauthnAuthService,
     TotpService,
+    MethodsService,
   ],
   exports: [
     StepUpJwtService,
@@ -44,6 +52,7 @@ import { WebauthnRegisterService } from "./webauthn/webauthn-register.service.js
     WebauthnRegisterService,
     WebauthnAuthService,
     TotpService,
+    MethodsService,
   ],
 })
 export class TwoFaModule {}

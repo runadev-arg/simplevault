@@ -106,6 +106,36 @@ export const TotpVerifySchema = z
 export type TotpVerifyDto = z.infer<typeof TotpVerifySchema>;
 
 /**
+ * Phase 03 Plan 06 — `GET /2fa/methods` strict-allowlist response.
+ *
+ * LOAD-BEARING (Truth 9): the server MUST `.parse(...)` this schema before
+ * responding so a future ORM hydration leak surfaces as a 500, not a silent
+ * exfil of secret material. Explicitly NOT in the shape:
+ *   - `credentialId` / `publicKey` / `counter` / `aaguid` / `transports`
+ *     (webauthn — opaque to the user, leaks authenticator details).
+ *   - `wrappedSecret` / `encryptedSecretAad` / `lastUsedStep` (totp —
+ *     would leak the wrap envelope or the replay-guard cursor).
+ *
+ * Order convention (Truth 9): webauthn first, then totp, then by createdAt
+ * asc. Enforced server-side in MethodsService.list.
+ */
+export const TwoFaMethodSchema = z
+  .object({
+    id: z.string().uuid(),
+    kind: z.enum(["webauthn", "totp"]),
+    name: z.string().min(1).max(64),
+    createdAt: z.string().datetime(),
+    /** ISO 8601 or null when the method has never been used. */
+    lastUsedAt: z.string().datetime().nullable(),
+  })
+  .strict();
+export type TwoFaMethod = z.infer<typeof TwoFaMethodSchema>;
+
+/** `GET /2fa/methods` returns an array (possibly empty). */
+export const TwoFaMethodsListSchema = z.array(TwoFaMethodSchema);
+export type TwoFaMethodsList = z.infer<typeof TwoFaMethodsListSchema>;
+
+/**
  * Phase 03 Plan 05 — `GET /sessions` response item.
  *
  * Truth 11: list one row per active session family (rotation chain

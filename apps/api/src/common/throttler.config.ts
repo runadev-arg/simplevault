@@ -80,6 +80,20 @@ export const RateLimits = {
     limit: intEnv(process.env.SESSIONS_REVOKE_ALL_RATE_LIMIT, 5),
     ttl: 60_000,
   },
+  // Phase 03-06 — 2FA method management ceilings. User-keyed via `req.user.id`
+  // (post-JwtAuthGuard). Same Plan-09 caveat as the sessions ceilings: the
+  // throttler currently runs BEFORE the JWT guard so these silently fall back
+  // to IP-keying until the APP_GUARD reorder lands.
+  twoFaMethodsListUser: {
+    name: "2fa-methods-list-user",
+    limit: intEnv(process.env.TWOFA_METHODS_LIST_RATE_LIMIT, 60),
+    ttl: 60_000,
+  },
+  twoFaMethodsDeleteUser: {
+    name: "2fa-methods-delete-user",
+    limit: intEnv(process.env.TWOFA_METHODS_DELETE_RATE_LIMIT, 30),
+    ttl: 60_000,
+  },
 } as const;
 
 /**
@@ -123,7 +137,9 @@ export class SimpleVaultThrottlerGuard extends ThrottlerGuard {
       name === "2fa-register-user" ||
       name === "sessions-list-user" ||
       name === "sessions-revoke-user" ||
-      name === "sessions-revoke-all-user";
+      name === "sessions-revoke-all-user" ||
+      name === "2fa-methods-list-user" ||
+      name === "2fa-methods-delete-user";
     if (userKeyed && typeof req.user?.id === "string") {
       tracker = `user:${req.user.id}`;
     } else if (name === "login-email") {
