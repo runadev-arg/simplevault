@@ -283,6 +283,137 @@ export class SessionService implements OnModuleInit {
     return { userId: row.userId, familyId: row.familyId };
   }
 
+  /**
+   * Phase 03 / Plan 05 (Truth 11) — list active sessions for `userId` for the
+   * `/sessions` UI. Returns one row per FAMILY (the latest non-revoked row by
+   * `created_at desc`) — the rotation chain inflates the table with one row
+   * per refresh, but UX-wise that's "one session". The representative row's
+   * id is the one the controller will accept on `DELETE /sessions/:id`.
+   *
+   * `current: true` for the family that contains `currentSessionId` (the sid
+   * claim from the caller's JWT — which is the most-recently-rotated row's
+   * id). We mark the representative row of that family, NOT the row whose id
+   * literally equals `currentSessionId` (after rotation those can differ).
+   *
+   * `ipHashB64Prefix` is the first 6 chars of base64(ip_hash). Operator
+   * decision (Truth 11): enough for "I recognise this network" UX without
+   * leaking the full hash to the browser. 6 chars × 6 bits/char = 36 bits;
+   * collisions are tolerable here — this is UX context, not authn.
+   */
+  async listForUser(
+    userId: string,
+    currentSessionId: string,
+  ): Promise<
+    {
+      id: string;
+      createdAt: string;
+      lastUsedAt: string;
+      current: boolean;
+      userAgentFamily: string;
+      ipHashB64Prefix: string;
+    }[]
+  > {
+    // DISTINCT ON (family_id) — pick the latest non-revoked row per family.
+    // Drizzle doesn't expose DISTINCT ON natively, so we fall back to raw SQL.
+    const result = await this.db.db.execute<{
+      id: string;
+      family_id: string;
+      created_at: Date;
+      used_at: Date | null;
+      user_agent_family: string | null;
+      ip_hash: Buffer | null;
+    }>(sql`
+      SELECT DISTINCT ON (family_id)
+        id, family_id, created_at, used_at, user_agent_family, ip_hash
+      FROM ${schema.userSessions}
+      WHERE user_id = ${userId} AND revoked_at IS NULL
+      ORDER BY family_id, created_at DESC
+    `);
+
+    // First find the family_id of `currentSessionId` (which may be ANY row in
+    // the chain, not necessarily the representative). One small extra query
+    // beats a join; this list is bounded by the number of active families.
+    let currentFamilyId: string | null = null;
+    if (currentSessionId) {
+      const cur = await this.db.db
+        .select({ familyId: schema.userSessions.familyId })
+        .from(schema.userSessions)
+        .where(and(eq(schema.userSessions.id, currentSessionId), eq(schema.userSessions.userId, userId)))
+        .limit(1);
+      currentFamilyId = cur[0]?.familyId ?? null;
+    }
+
+    const items = result.rows.map((r) => {
+      const created = r.created_at instanceof Date ? r.created_at : new Date(r.created_at);
+      const used = r.used_at ? (r.used_at instanceof Date ? r.used_at : new Date(r.used_at)) : null;
+      const ipHashBuf = r.ip_hash
+        ? Buffer.isBuffer(r.ip_hash)
+          ? r.ip_hash
+          : Buffer.from(r.ip_hash as unknown as ArrayBufferLike)
+        : null;
+      return {
+        id: r.id,
+        createdAt: created.toISOString(),
+        lastUsedAt: (used ?? created).toISOString(),
+        current: r.family_id === currentFamilyId,
+        userAgentFamily: r.user_agent_family ?? "unknown",
+        ipHashB64Prefix: ipHashBuf ? ipHashBuf.toString("base64").slice(0, 6) : "",
+      };
+    });
+
+    // current pinned first; otherwise createdAt asc.
+    items.sort((a, b) => {
+      if (a.current !== b.current) return a.current ? -1 : 1;
+      return a.createdAt.localeCompare(b.createdAt);
+    });
+    return items;
+  }
+
+  /**
+   * Phase 03 / Plan 05 (Truth 12) — revoke the family containing `sessionId`
+   * IFF the row belongs to `userId` (anti-enumeration: cross-user → null,
+   * controller maps to 404 NOT 403). Family-revoke semantics: every
+   * non-revoked row sharing the family is marked revoked.
+   *
+   * Does NOT bump the epoch (single-session-revoke is intentionally softer
+   * than revoke-all — Plan 04 Key Link 3). Only `revokeAllForUser` bumps.
+   *
+   * Returns `{familyId, revokedCount}` on success, `null` on cross-user /
+   * non-existent / already-revoked (callers must NOT distinguish — anti-
+   * enumeration means the same 404 for all three).
+   */
+  async revokeOne(
+    userId: string,
+    sessionId: string,
+  ): Promise<{ familyId: string; revokedCount: number } | null> {
+    const owned = await this.db.db
+      .select({ familyId: schema.userSessions.familyId })
+      .from(schema.userSessions)
+      .where(and(eq(schema.userSessions.id, sessionId), eq(schema.userSessions.userId, userId)))
+      .limit(1);
+    const row = owned[0];
+    if (!row) return null;
+
+    const result = await this.db.db.execute<{ id: string }>(sql`
+      UPDATE ${schema.userSessions}
+      SET revoked_at = now()
+      WHERE family_id = ${row.familyId} AND revoked_at IS NULL
+      RETURNING id
+    `);
+    const revokedCount = result.rows.length;
+    if (revokedCount === 0) {
+      // The family was already revoked between our SELECT and UPDATE. Treat as
+      // not-found from the caller's perspective (anti-enumeration: no point
+      // distinguishing "you owned it but it was already gone" from "you don't
+      // own it" — the leaked bit is identical).
+      return null;
+    }
+    return { familyId: row.familyId, revokedCount };
+  }
+
+  // `revokeAllForUser` lands in Plan 05 / T2 alongside the controller's
+  // POST /sessions/revoke-all + audit-event extension.
+
   /** Throws 401 with the canonical AUTH_INVALID_CREDENTIALS shape. */
   static throw401(): never {
     throw new HttpException(

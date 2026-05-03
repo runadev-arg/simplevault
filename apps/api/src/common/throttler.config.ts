@@ -58,6 +58,23 @@ export const RateLimits = {
     limit: intEnv(process.env.TWOFA_VERIFY_RATE_LIMIT, 30),
     ttl: 60_000,
   },
+  // Phase 03-05 — sessions API ceilings. User-keyed via `req.user.id`
+  // (post-JwtAuthGuard). Until Plan 09 lands the APP_GUARD reorder, the
+  // throttler runs BEFORE the JWT guard — `req.user.id` is undefined and
+  // `generateKey` falls back to IP-keying for these names. That is tolerable
+  // for the Plan-05↔Plan-09 lag because the absolute IP-keyed ceilings are
+  // still tight (60/30 per minute is sub-abuse for any plausible IP); the
+  // user-keying just becomes effective once Plan 09 reorders the guards.
+  sessionsListUser: {
+    name: "sessions-list-user",
+    limit: intEnv(process.env.SESSIONS_LIST_RATE_LIMIT, 60),
+    ttl: 60_000,
+  },
+  sessionsRevokeUser: {
+    name: "sessions-revoke-user",
+    limit: intEnv(process.env.SESSIONS_REVOKE_RATE_LIMIT, 30),
+    ttl: 60_000,
+  },
 } as const;
 
 /**
@@ -96,7 +113,12 @@ export class SimpleVaultThrottlerGuard extends ThrottlerGuard {
       body?: Record<string, unknown>;
     }>();
     let tracker = suffix;
-    if ((name === "me-user" || name === "2fa-register-user") && typeof req.user?.id === "string") {
+    const userKeyed =
+      name === "me-user" ||
+      name === "2fa-register-user" ||
+      name === "sessions-list-user" ||
+      name === "sessions-revoke-user";
+    if (userKeyed && typeof req.user?.id === "string") {
       tracker = `user:${req.user.id}`;
     } else if (name === "login-email") {
       const body = req.body;

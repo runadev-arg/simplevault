@@ -11,6 +11,7 @@ import { HealthModule } from "./health/health.module.js";
 import { InviteModule } from "./invite/invite.module.js";
 import { MeModule } from "./me/me.module.js";
 import { RedisModule } from "./redis/redis.module.js";
+import { SessionsModule } from "./sessions/sessions.module.js";
 import { TwoFaModule } from "./twofa/twofa.module.js";
 
 /**
@@ -141,6 +142,10 @@ const PINO_REDACT_PATHS = [
     AuthModule,
     MeModule,
     TwoFaModule,
+    // Phase 03 Plan 05 — `/sessions` user-facing API (list / revoke-one /
+    // revoke-all). Distinct from `auth/sessions/SessionService` which is the
+    // refresh-rotation primitive; this module is the controller surface.
+    SessionsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: SimpleVaultThrottlerGuard }],
 })

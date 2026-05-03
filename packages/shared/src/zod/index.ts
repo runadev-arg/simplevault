@@ -105,6 +105,36 @@ export const TotpVerifySchema = z
   .strict();
 export type TotpVerifyDto = z.infer<typeof TotpVerifySchema>;
 
+/**
+ * Phase 03 Plan 05 — `GET /sessions` response item.
+ *
+ * Truth 11: list one row per active session family (rotation chain
+ * collapsed). The shape is INTENTIONALLY narrow — anything not on this
+ * schema MUST NOT appear in the response. In particular the schema does
+ * NOT include: full ip_hash, raw IP, full user-agent, refresh_token_hash,
+ * family_id, prev_token_id, expires_at. The server `.parse(...)` against
+ * this schema is a defence-in-depth check against ORM-hydration leaks.
+ *
+ * `ipHashB64Prefix` is the first 6 chars of base64(ip_hash) — enough for
+ * the user to recognise "same network" without leaking the full hash to
+ * JS (where an XSS could exfiltrate it). 36 bits of entropy, collisions
+ * tolerated; this is UX context, not authn.
+ */
+export const SessionListItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    createdAt: z.string().datetime(),
+    lastUsedAt: z.string().datetime(),
+    current: z.boolean(),
+    userAgentFamily: z.string().min(1).max(64),
+    ipHashB64Prefix: z.string().max(6),
+  })
+  .strict();
+export type SessionListItem = z.infer<typeof SessionListItemSchema>;
+
+export const SessionListResponseSchema = z.array(SessionListItemSchema);
+export type SessionListResponse = z.infer<typeof SessionListResponseSchema>;
+
 export const MeResponseSchema = z
   .object({
     id: z.string().uuid(),

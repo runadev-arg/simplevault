@@ -40,6 +40,10 @@ export const AuditAction = {
   TwoFaTotpRegisterFail: "auth.2fa.totp.register.fail",
   TwoFaTotpVerifyOk: "auth.2fa.totp.verify.ok",
   TwoFaTotpVerifyFail: "auth.2fa.totp.verify.fail",
+  // Phase 03-05 — sessions API (Truths 12, 13). Both events follow the
+  // `auth.<verb>.<outcome>` namespace established by Phase-02 events; targetId
+  // is the sessionId (revoked) or userId (revoke_all).
+  SessionRevoked: "auth.session.revoked",
 } as const;
 
 export type AuditActionValue = (typeof AuditAction)[keyof typeof AuditAction];
