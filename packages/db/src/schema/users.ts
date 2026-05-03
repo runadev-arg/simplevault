@@ -1,5 +1,13 @@
 import { sql } from "drizzle-orm";
-import { jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 import { bytea } from "./_bytea.js";
 
@@ -53,6 +61,16 @@ export const users = pgTable(
     wrappedMasterDekRecovery: bytea("wrapped_master_dek_recovery").notNull(),
     /** HMAC-SHA256(SERVER_RECOVERY_HMAC_SECRET, sha256(normalised_phrase)). Lookup key for recovery. */
     recoveryHmac: bytea("recovery_hmac").notNull(),
+
+    // --- Session-epoch (Phase 03 — REQ-AUTH-004) ---
+    /**
+     * Bumped by `POST /sessions/revoke-all` and `DELETE /sessions/:id`. Every
+     * issued access JWT carries an `epoch` claim; `JwtAuthGuard` rejects
+     * tokens whose `epoch` ≠ this column with 401 AUTH_SESSION_REVOKED, giving
+     * us per-user revocation within ≤ next-request latency without per-token
+     * Redis lookups. Cached in Redis (TTL 60s, busted on every write here).
+     */
+    sessionEpoch: integer("session_epoch").notNull().default(0),
 
     // --- Per-user keypair material ---
     /** X25519 public key (32 B). Plaintext — public by design. */
