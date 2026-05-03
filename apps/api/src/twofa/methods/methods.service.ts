@@ -126,6 +126,20 @@ export class MethodsService {
    * hand-off seam).
    */
   async countActive(userId: string): Promise<number> {
+    const c = await this.countByKind(userId);
+    return c.webauthn + c.totp;
+  }
+
+  /**
+   * Phase 03 Plan 08 — per-kind active-method count. Used by `/auth/login`
+   * (Truth 8) to populate `twoFa: {webauthnAvailable, totpAvailable}` in
+   * the 2FA-required response body so the web client can present only the
+   * ceremonies the user actually has enrolled.
+   *
+   * Also serves as the underlying primitive for `countActive` (sum of the
+   * two values) — single source of truth, no drift.
+   */
+  async countByKind(userId: string): Promise<{ webauthn: number; totp: number }> {
     const [waRow] = await this.db.db
       .select({ c: count() })
       .from(schema.webauthnCredentials)
@@ -134,7 +148,10 @@ export class MethodsService {
       .select({ c: count() })
       .from(schema.totpCredentials)
       .where(eq(schema.totpCredentials.userId, userId));
-    return Number(waRow?.c ?? 0) + Number(totpRow?.c ?? 0);
+    return {
+      webauthn: Number(waRow?.c ?? 0),
+      totp: Number(totpRow?.c ?? 0),
+    };
   }
 
   /**

@@ -165,6 +165,36 @@ export type SessionListItem = z.infer<typeof SessionListItemSchema>;
 export const SessionListResponseSchema = z.array(SessionListItemSchema);
 export type SessionListResponse = z.infer<typeof SessionListResponseSchema>;
 
+/**
+ * Phase 03 Plan 08 — `/auth/login` 2FA-required response (Truth 8).
+ *
+ * The 2FA branch returns this discriminated body when the verified user has
+ * ≥1 active 2FA method. The 1FA-only branch keeps the legacy Phase-02 body
+ * (no `kind` field — regression-free for existing callers). Web clients
+ * branch on `"kind" in body` OR `"stepUpToken" in body` to distinguish.
+ *
+ * SECURITY (Truth 8 + Key Link 5):
+ *   - The step-up token's `purpose` claim is `"2fa-stepup"`. `JwtAuthGuard`
+ *     refuses any token with `purpose !== undefined`, so this token cannot
+ *     impersonate an access token.
+ *   - exp = iat + STEP_UP_TOKEN_TTL (default 120s).
+ *   - NO `__Host-refresh` cookie is set on this branch — the user has no
+ *     refresh family yet.
+ */
+export const LoginStepUpResponseSchema = z
+  .object({
+    kind: z.literal("2fa-required"),
+    stepUpToken: z.string().min(1),
+    twoFa: z
+      .object({
+        webauthnAvailable: z.boolean(),
+        totpAvailable: z.boolean(),
+      })
+      .strict(),
+  })
+  .strict();
+export type LoginStepUpResponse = z.infer<typeof LoginStepUpResponseSchema>;
+
 export const MeResponseSchema = z
   .object({
     id: z.string().uuid(),

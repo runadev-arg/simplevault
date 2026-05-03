@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { forwardRef, Module } from "@nestjs/common";
 
 import { AuthModule } from "../auth/auth.module.js";
 import { DbModule } from "../db/db.module.js";
@@ -36,7 +36,11 @@ import { WebauthnRegisterService } from "./webauthn/webauthn-register.service.js
  * RedisService for the issuance-nonce cache without an explicit import.
  */
 @Module({
-  imports: [AuthModule, DbModule],
+  // Phase 03 Plan 08 — `forwardRef(() => AuthModule)` resolves the cycle
+  // introduced when LoginService started consuming MethodsService +
+  // StepUpJwtService for the 2FA-presence branch. AuthModule mirrors this
+  // with its own forwardRef. See `auth.module.ts` for the full rationale.
+  imports: [forwardRef(() => AuthModule), DbModule],
   controllers: [
     WebauthnRegisterController,
     WebauthnAuthController,

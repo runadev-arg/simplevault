@@ -21,6 +21,14 @@ export const AuditAction = {
   SignupFail: "auth.signup.fail",
   LoginOk: "auth.login.ok",
   LoginFail: "auth.login.fail",
+  /**
+   * Phase 03 Plan 08 — `/auth/login` succeeded the 1FA verification AND the
+   * user has ≥1 active 2FA method, so the response is a step-up token (not a
+   * full session). The audit row's `data.kind: "step-up"` is the forensic
+   * marker; the canonical "session minted" success keeps `LoginOk` (with
+   * `data.kind: "session"`). Truth 8.
+   */
+  LoginStepUpIssued: "auth.login.step_up_issued",
   Logout: "auth.logout",
   RefreshOk: "auth.refresh.ok",
   RefreshFail: "auth.refresh.fail",

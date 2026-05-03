@@ -91,6 +91,18 @@ export class LoginController {
       );
     }
 
+    // Phase 03 Plan 08 — branch on result.kind (Truth 8).
+    //
+    // 2FA-required: NO refresh cookie. The user has no refresh family yet;
+    // the family is created by `/2fa/webauthn/finish-auth` or
+    // `/2fa/totp/verify` after the 2FA ceremony completes.
+    //
+    // session: Phase-02 behaviour — set the `__Host-refresh` cookie and
+    // return the existing 200 body byte-equal to pre-Plan-08 callers.
+    if (result.kind === "2fa-required") {
+      return result.body;
+    }
+
     res.cookie(REFRESH_COOKIE, result.refresh.rawToken, {
       httpOnly: true,
       secure: true,
