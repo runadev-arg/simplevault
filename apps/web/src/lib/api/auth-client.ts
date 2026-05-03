@@ -50,7 +50,11 @@ export const AuthParamsResponseSchema = z.object({
   serverArgonSalt: z.string().min(1), // base64, 16 B
 });
 
-export const LoginResponseSchema = z.object({
+/**
+ * Phase 02 1FA-only success body. The discriminator is implicit (absence of
+ * `kind`) — Phase 02 callers see a byte-equal response (regression-free).
+ */
+export const LoginSessionResponseSchema = z.object({
   accessToken: z.string().min(1),
   expiresIn: z.number().int().positive(),
   wrappedMasterDek: z.string().min(1),
@@ -62,6 +66,39 @@ export const LoginResponseSchema = z.object({
   wrappedUserSigningSk: z.string().min(1),
   wrappedUserKxSk: z.string().min(1),
 });
+
+/**
+ * Phase 03 Plan 08 — `/auth/login` 2FA-required branch (Truth 8).
+ *
+ * Returned when the verified user has >=1 active 2FA method. Carries a
+ * step-up token (`purpose:"2fa-stepup"`, exp=iat+STEP_UP_TOKEN_TTL) that
+ * authorises ONLY `/2fa/*` endpoints. NO accessToken, NO `__Host-refresh`
+ * cookie set, NO wrapped material — those land after the 2FA ceremony
+ * completes via `/2fa/webauthn/finish-auth` or `/2fa/totp/verify`.
+ */
+export const LoginStepUpResponseSchema = z.object({
+  kind: z.literal("2fa-required"),
+  stepUpToken: z.string().min(1),
+  twoFa: z.object({
+    webauthnAvailable: z.boolean(),
+    totpAvailable: z.boolean(),
+  }),
+});
+
+/**
+ * Discriminator: the 2FA-required branch carries `kind:"2fa-required"`;
+ * the 1FA-only Phase-02 branch carries no `kind`. We use a non-discriminated
+ * union (z.union) and let Zod try both shapes in order. If the body has a
+ * `kind` field the second schema wins; otherwise the first.
+ *
+ * NOTE: order matters. Put the rarer / explicit-discriminator shape FIRST
+ * so a 1FA-only body never accidentally validates against a future
+ * extension of the step-up shape.
+ */
+export const LoginResponseSchema = z.union([
+  LoginStepUpResponseSchema,
+  LoginSessionResponseSchema,
+]);
 
 export const RefreshResponseSchema = z.object({
   accessToken: z.string().min(1),
@@ -86,6 +123,14 @@ export type InviteRedeemResponse = z.infer<typeof InviteRedeemResponseSchema>;
 export type SignupResponse = z.infer<typeof SignupResponseSchema>;
 export type Argon2Params = z.infer<typeof Argon2ParamsSchema>;
 export type AuthParamsResponse = z.infer<typeof AuthParamsResponseSchema>;
+export type LoginSessionResponse = z.infer<typeof LoginSessionResponseSchema>;
+export type LoginStepUpResponse = z.infer<typeof LoginStepUpResponseSchema>;
+/**
+ * Discriminated login result. Plan 10's `/login/2fa` page consumes the
+ * step-up branch; existing callers (Plan 02-11) continue to consume the
+ * session branch. Distinguish via `"kind" in result` or
+ * `result.kind === "2fa-required"`.
+ */
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
 export type RefreshResponse = z.infer<typeof RefreshResponseSchema>;
 export type MeResponse = z.infer<typeof MeResponseSchema>;

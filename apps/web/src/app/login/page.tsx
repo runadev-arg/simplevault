@@ -133,8 +133,54 @@ function LoginPageInner(): JSX.Element {
         argon2SecretKeyHash: envelope.argon2SecretKeyHash,
       });
 
+      // Phase 03 Plan 08 — `/auth/login` may now return a 2FA-required
+      // branch (Truth 8). Detect via the `kind` discriminator the server
+      // sets only on the step-up shape; legacy 1FA-only callers see no
+      // `kind` field (regression-free).
+      //
+      // Plan 10 ships the `/login/2fa` page that consumes the step-up
+      // token + `twoFa` flags. Until Plan 10 lands, redirecting to that
+      // route is a 404 — acceptable for the inter-wave window since no
+      // test users have 2FA enrolled in any deployed environment yet.
+      // TS narrowing: `"kind" in loginRes` alone widens to `unknown` on the
+      // discriminator-bearing branch. Cast through `as { kind?: string }`
+      // and re-check; once we've taken the early-return, the rest of the
+      // function continues with the session-shape narrowing.
+      const stepUpKind = (loginRes as { kind?: unknown }).kind;
+      if (stepUpKind === "2fa-required") {
+        const stepUp = loginRes as Extract<typeof loginRes, { kind: "2fa-required" }>;
+        // Stash the step-up token + flags via sessionStorage so the
+        // /login/2fa page can pick them up after the navigation. The
+        // step-up token is short-lived (default 120s) and authorises
+        // only /2fa/* — sessionStorage is acceptable for this brief
+        // hand-off (Plan 10 may revisit).
+        try {
+          sessionStorage.setItem(
+            "sv:step-up",
+            JSON.stringify({
+              token: stepUp.stepUpToken,
+              twoFa: stepUp.twoFa,
+            }),
+          );
+        } catch {
+          // sessionStorage may be disabled; Plan 10 must handle the
+          // missing-handoff case by redirecting back to /login.
+        }
+        // Wipe any partially-set memory state from the 1FA leg.
+        accessTokenStore.wipe();
+        keyStore.wipe();
+        secretKey.fill(0);
+        setPhase("ok");
+        window.location.assign("/login/2fa");
+        return;
+      }
+
+      // ---- 1FA-only branch — Phase-02 unchanged ----
+      // After the early-return above, `loginRes` is necessarily the session
+      // shape (no `kind` discriminator); narrow explicitly so TS sees it.
+      const sessionRes = loginRes as Exclude<typeof loginRes, { kind: "2fa-required" }>;
       // Step 4: stash access token in memory only.
-      accessTokenStore.set(loginRes.accessToken, loginRes.expiresIn);
+      accessTokenStore.set(sessionRes.accessToken, sessionRes.expiresIn);
 
       // Step 5: unwrap the wrapped key material.
       setPhase("unlocking");
@@ -142,11 +188,11 @@ function LoginPageInner(): JSX.Element {
         email: trimmedEmail,
         password,
         secretKey,
-        argon2Params: loginRes.argon2Params,
-        userArgonSaltB64: loginRes.userArgonSalt,
-        wrappedMasterDekB64: loginRes.wrappedMasterDek,
-        wrappedUserSigningSkB64: loginRes.wrappedUserSigningSk,
-        wrappedUserKxSkB64: loginRes.wrappedUserKxSk,
+        argon2Params: sessionRes.argon2Params,
+        userArgonSaltB64: sessionRes.userArgonSalt,
+        wrappedMasterDekB64: sessionRes.wrappedMasterDek,
+        wrappedUserSigningSkB64: sessionRes.wrappedUserSigningSk,
+        wrappedUserKxSkB64: sessionRes.wrappedUserKxSk,
       });
       derivedRefs = unlocked;
 
