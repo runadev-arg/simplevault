@@ -1,3 +1,20 @@
+-- ----------------------------------------------------------------------------
+-- Pre-flight: defensive guard for FINDING-0017 email length cap (varchar(254)).
+-- Aborts the migration BEFORE any destructive change if any existing row
+-- holds an email > 254 chars. At Phase-02 close cardinality (≤50 users) this
+-- is paranoid-safe but cheap; the `USING substring(email,1,254)` cast below
+-- is itself idempotent for our cardinality. Kept as a hard fail-fast.
+-- ----------------------------------------------------------------------------
+DO $$
+BEGIN
+	IF EXISTS (SELECT 1 FROM users WHERE length(email) > 254) THEN
+		RAISE EXCEPTION 'pre-existing users.email > 254 chars — refusing migration (FINDING-0017 guard)';
+	END IF;
+	IF EXISTS (SELECT 1 FROM invite_codes WHERE length(email) > 254) THEN
+		RAISE EXCEPTION 'pre-existing invite_codes.email > 254 chars — refusing migration (FINDING-0017 guard)';
+	END IF;
+END $$;
+--> statement-breakpoint
 CREATE TABLE "webauthn_credentials" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -39,4 +56,11 @@ CREATE INDEX "webauthn_credentials_user_idx" ON "webauthn_credentials" USING btr
 CREATE UNIQUE INDEX "webauthn_credentials_credential_id_idx" ON "webauthn_credentials" USING btree ("credential_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "webauthn_challenges_user_kind_idx" ON "webauthn_challenges" USING btree ("user_id","kind");--> statement-breakpoint
 CREATE INDEX "webauthn_challenges_expires_idx" ON "webauthn_challenges" USING btree ("expires_at");--> statement-breakpoint
-CREATE INDEX "totp_credentials_user_idx" ON "totp_credentials" USING btree ("user_id");
+CREATE INDEX "totp_credentials_user_idx" ON "totp_credentials" USING btree ("user_id");--> statement-breakpoint
+-- ----------------------------------------------------------------------------
+-- FINDING-0017 / FINDING-0022 fold-in: tighten email columns to varchar(254).
+-- USING substring(...) makes the cast idempotent for any existing row even
+-- if the pre-flight DO-block above is somehow bypassed.
+-- ----------------------------------------------------------------------------
+ALTER TABLE "users" ALTER COLUMN "email" SET DATA TYPE varchar(254) USING substring("email", 1, 254);--> statement-breakpoint
+ALTER TABLE "invite_codes" ALTER COLUMN "email" SET DATA TYPE varchar(254) USING substring("email", 1, 254);

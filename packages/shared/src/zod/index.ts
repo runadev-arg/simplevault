@@ -30,7 +30,8 @@ export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 export const MeResponseSchema = z
   .object({
     id: z.string().uuid(),
-    email: z.string().email(),
+    // RFC 5321 ceiling — mirrors users.email varchar(254) (FINDING-0017 fold).
+    email: z.string().email().max(254),
     createdAt: z.string().datetime(),
     argon2Params: z.object({
       memoryKiB: z.number().int().positive(),

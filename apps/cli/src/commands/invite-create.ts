@@ -5,6 +5,8 @@ import { openDb } from "../lib/db.js";
 import { hmacSha256, readInviteSecret } from "../lib/hmac.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** RFC 5321 ceiling — matches users.email/invite_codes.email varchar(254) (FINDING-0017 fold). */
+const EMAIL_MAX_LEN = 254;
 
 export interface InviteCreateOptions {
   email: string;
@@ -26,6 +28,12 @@ export async function inviteCreate(opts: InviteCreateOptions): Promise<void> {
   const email = opts.email.trim().toLowerCase();
   if (!EMAIL_RE.test(email)) {
     process.stderr.write(`ERROR: invalid email: ${opts.email}\n`);
+    process.exit(2);
+  }
+  if (email.length > EMAIL_MAX_LEN) {
+    process.stderr.write(
+      `ERROR: email exceeds ${EMAIL_MAX_LEN.toString()}-char ceiling (got ${email.length.toString()})\n`,
+    );
     process.exit(2);
   }
   const ttlDays = parseTtlDays(opts.ttlDays ?? "7");

@@ -3,10 +3,10 @@ import {
   integer,
   jsonb,
   pgTable,
-  text,
   timestamp,
   uniqueIndex,
   uuid,
+  varchar,
 } from "drizzle-orm/pg-core";
 
 import { bytea } from "./_bytea.js";
@@ -40,7 +40,10 @@ export const users = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     // Stored lower-cased on insert/update; case-insensitive uniqueness is
     // enforced via a functional UNIQUE INDEX on lower(email) below.
-    email: text("email").notNull(),
+    // RFC 5321 ceiling — also bounds throttler login-email Redis key length
+    // (FINDING-0017 storage-tier fix; FINDING-0022 partial mitigation, completed
+    // in Plan 03-09 via sha256(email).slice(0,16) keying).
+    email: varchar("email", { length: 254 }).notNull(),
 
     // --- Auth verifier (REQ-CRYPTO-003) ---
     /** Argon2id(secret_key, server_argon_salt). NOT the secret_key itself. */

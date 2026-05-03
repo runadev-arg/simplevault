@@ -20,7 +20,8 @@ const fixedB64 = (n: number) =>
 
 export const LoginSchema = z
   .object({
-    email: z.string().email().toLowerCase().trim(),
+    // RFC 5321 ceiling — also bounds throttler login-email Redis key length (FINDING-0017 + 0022 fold).
+    email: z.string().email().toLowerCase().trim().max(254),
     /** 32-byte verifier candidate the client computed via Argon2id(secret_key, server_argon_salt, argon2_params). */
     argon2SecretKeyHash: fixedB64(32),
   })

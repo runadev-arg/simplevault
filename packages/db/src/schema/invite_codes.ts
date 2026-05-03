@@ -1,5 +1,12 @@
 import { sql } from "drizzle-orm";
-import { index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  index,
+  pgTable,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
 
 import { bytea } from "./_bytea.js";
 import { users } from "./users.js";
@@ -31,8 +38,12 @@ export const inviteCodes = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     /** HMAC-SHA256(SERVER_INVITE_SECRET, raw_code). Never the raw code. */
     codeHash: bytea("code_hash").notNull(),
-    /** Lowercased on insert by the issuing CLI. */
-    email: text("email").notNull(),
+    /**
+     * Lowercased on insert by the issuing CLI.
+     * RFC 5321 ceiling — also bounds throttler login-email Redis key length
+     * (FINDING-0017 storage-tier fix; FINDING-0022 partial mitigation).
+     */
+    email: varchar("email", { length: 254 }).notNull(),
     /** Operator user_id; nullable until admin-as-user exists. */
     createdBy: uuid("created_by"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
