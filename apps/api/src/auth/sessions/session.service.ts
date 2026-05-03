@@ -8,6 +8,8 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { DbService } from "../../db/db.service.js";
 
+import { SessionEpochCache } from "./session-epoch.cache.js";
+
 export interface IssuedRefreshToken {
   /** raw token, base64url — set as cookie value, never stored. */
   rawToken: string;
@@ -60,6 +62,7 @@ export class SessionService implements OnModuleInit {
   constructor(
     private readonly db: DbService,
     private readonly config: ConfigService,
+    private readonly epochCache: SessionEpochCache,
   ) {}
 
   onModuleInit(): void {
@@ -234,6 +237,33 @@ export class SessionService implements OnModuleInit {
         },
       } as const;
     });
+  }
+
+  /**
+   * Phase 03 / Plan 04 — read the user's current `users.session_epoch`
+   * via the Redis-cached `SessionEpochCache`. Use at every JWT-issuing
+   * site so freshly-minted access tokens carry the latest epoch (any
+   * /sessions/revoke-all bump becomes effective on the *next* request).
+   */
+  async getEpoch(userId: string): Promise<number> {
+    return this.epochCache.get(userId);
+  }
+
+  /**
+   * Phase 03 / Plan 04 — bump `users.session_epoch` for `userId` and
+   * invalidate the cached entry. Call this from `/sessions/revoke-all`
+   * (Plan 05) — single-session revoke (`DELETE /sessions/:id`) does NOT
+   * call this (per Plan 04 Key Link 3 — bumping per single-session-revoke
+   * would invalidate other valid sessions' access tokens for the same user).
+   *
+   * Ordering: UPDATE first (commits in the implicit transaction Postgres
+   * wraps around `execute`), THEN DEL the cache. The opposite order would
+   * race: DEL → reader repopulates from DB (still old) → UPDATE → cache
+   * holds the stale value until TTL.
+   */
+  async bumpEpoch(userId: string): Promise<void> {
+    await this.db.db.execute(sql`UPDATE ${schema.users} SET session_epoch = session_epoch + 1 WHERE id = ${userId}`);
+    await this.epochCache.bust(userId);
   }
 
   /** Logout: family-revoke every non-revoked sibling of the presented token. */

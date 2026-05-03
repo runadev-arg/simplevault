@@ -71,13 +71,15 @@ export class RefreshController {
     }
 
     const next = result.next;
+    const epoch = await this.sessions.getEpoch(next.userId);
     const accessToken = await this.jwt.signAccessToken({
       sub: next.userId,
       sid: next.sessionId,
       fam: next.familyId,
-      // Phase 03 hand-off: Plan 04 replaces this stub with the user's
-      // current `users.session_epoch` (Redis-cached).
-      epoch: 0,
+      // Phase 03 / Plan 04 — same getEpoch hop as /auth/login. Refresh
+      // ALSO stamps the current epoch so a refreshed access token survives
+      // until the next epoch bump (revoke-all) just like a fresh login.
+      epoch,
     });
 
     res.cookie(REFRESH_COOKIE, next.rawToken, {

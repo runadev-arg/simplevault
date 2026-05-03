@@ -84,14 +84,16 @@ export class LoginService {
 
     // Mint session + access token.
     const refresh = await this.sessions.createOnLogin(user.id, ip, ua);
+    const epoch = await this.sessions.getEpoch(user.id);
     const accessToken = await this.jwt.signAccessToken({
       sub: user.id,
       sid: refresh.sessionId,
       fam: refresh.familyId,
-      // Phase 03 hand-off: Plan 04 replaces this stub with the user's
-      // current `users.session_epoch` (Redis-cached). Per Plan 03-02's
-      // "Note for Plan 04 hand-off", surgical 3-line replacement.
-      epoch: 0,
+      // Phase 03 / Plan 04 — current `users.session_epoch` (Redis-cached
+      // via SessionEpochCache, TTL 60s). Any subsequent revoke-all bumps
+      // this column + busts the cache; this access token will be rejected
+      // on its next request.
+      epoch,
     });
 
     AuditEventService.emit(this.logger, {
