@@ -88,6 +88,10 @@ export class LoginService {
       sub: user.id,
       sid: refresh.sessionId,
       fam: refresh.familyId,
+      // Phase 03 hand-off: Plan 04 replaces this stub with the user's
+      // current `users.session_epoch` (Redis-cached). Per Plan 03-02's
+      // "Note for Plan 04 hand-off", surgical 3-line replacement.
+      epoch: 0,
     });
 
     AuditEventService.emit(this.logger, {

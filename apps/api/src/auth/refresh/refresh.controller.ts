@@ -75,6 +75,9 @@ export class RefreshController {
       sub: next.userId,
       sid: next.sessionId,
       fam: next.familyId,
+      // Phase 03 hand-off: Plan 04 replaces this stub with the user's
+      // current `users.session_epoch` (Redis-cached).
+      epoch: 0,
     });
 
     res.cookie(REFRESH_COOKIE, next.rawToken, {

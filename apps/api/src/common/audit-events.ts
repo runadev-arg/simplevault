@@ -28,6 +28,18 @@ export const AuditAction = {
   InviteRedeemOk: "invite.redeem.ok",
   InviteRedeemFail: "invite.redeem.fail",
   RateLimitExceeded: "rate_limit.exceeded",
+  // Phase 03-02 — 2FA / WebAuthn ceremonies. The 11-action v1 enum extends
+  // here per 03-INDEX (extension permitted within v1; field names + types
+  // remain frozen).
+  TwoFaWebauthnRegisterOk: "auth.2fa.webauthn.register.ok",
+  TwoFaWebauthnRegisterFail: "auth.2fa.webauthn.register.fail",
+  TwoFaWebauthnAuthOk: "auth.2fa.webauthn.auth.ok",
+  TwoFaWebauthnAuthFail: "auth.2fa.webauthn.auth.fail",
+  // Phase 03-03 — TOTP enrolment + verification (Key Links 3, 4).
+  TwoFaTotpRegisterOk: "auth.2fa.totp.register.ok",
+  TwoFaTotpRegisterFail: "auth.2fa.totp.register.fail",
+  TwoFaTotpVerifyOk: "auth.2fa.totp.verify.ok",
+  TwoFaTotpVerifyFail: "auth.2fa.totp.verify.fail",
 } as const;
 
 export type AuditActionValue = (typeof AuditAction)[keyof typeof AuditAction];

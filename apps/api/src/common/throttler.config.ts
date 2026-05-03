@@ -40,6 +40,24 @@ export const RateLimits = {
   authParamsIp: { name: "auth-params-ip", limit: intEnv(process.env.AUTH_PARAMS_RATE_LIMIT, 100), ttl: 60_000 },
   inviteRedeemIp: { name: "invite-redeem-ip", limit: intEnv(process.env.INVITE_REDEEM_RATE_LIMIT, 30), ttl: 60 * 60_000 },
   meUser: { name: "me-user", limit: intEnv(process.env.ME_RATE_LIMIT, 100), ttl: 60_000 },
+  // Phase 03-02 — 2FA enrolment + WebAuthn ceremony ceilings. User-keyed.
+  twoFaRegisterUser: {
+    name: "2fa-register-user",
+    limit: intEnv(process.env.TWOFA_REGISTER_RATE_LIMIT, 10),
+    ttl: 60_000,
+  },
+  twoFaWebauthnAuthIp: {
+    name: "2fa-webauthn-auth-ip",
+    limit: intEnv(process.env.TWOFA_WEBAUTHN_AUTH_RATE_LIMIT, 30),
+    ttl: 60_000,
+  },
+  // Phase 03-03 — TOTP /verify ceiling. Step-up-token-bearer route (no
+  // req.user yet); IP-keyed via the default getTracker.
+  twoFaVerifyIp: {
+    name: "2fa-verify-ip",
+    limit: intEnv(process.env.TWOFA_VERIFY_RATE_LIMIT, 30),
+    ttl: 60_000,
+  },
 } as const;
 
 /**
@@ -78,7 +96,7 @@ export class SimpleVaultThrottlerGuard extends ThrottlerGuard {
       body?: Record<string, unknown>;
     }>();
     let tracker = suffix;
-    if (name === "me-user" && typeof req.user?.id === "string") {
+    if ((name === "me-user" || name === "2fa-register-user") && typeof req.user?.id === "string") {
       tracker = `user:${req.user.id}`;
     } else if (name === "login-email") {
       const body = req.body;

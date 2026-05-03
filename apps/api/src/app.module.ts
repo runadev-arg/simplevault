@@ -11,6 +11,7 @@ import { HealthModule } from "./health/health.module.js";
 import { InviteModule } from "./invite/invite.module.js";
 import { MeModule } from "./me/me.module.js";
 import { RedisModule } from "./redis/redis.module.js";
+import { TwoFaModule } from "./twofa/twofa.module.js";
 
 /**
  * Pino redaction list — comprehensive enumeration of every sensitive field
@@ -139,6 +140,7 @@ const PINO_REDACT_PATHS = [
     InviteModule,
     AuthModule,
     MeModule,
+    TwoFaModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: SimpleVaultThrottlerGuard }],
 })
