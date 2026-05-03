@@ -10,16 +10,20 @@ import { ErrorCodes } from "@simplevault/shared/errors";
 import type { Request } from "express";
 import { decodeJwt } from "jose";
 
+import { SessionEpochCache } from "../sessions/session-epoch.cache.js";
+
 import { JwtService } from "./jwt.service.js";
 
 /**
  * Augmented Express request with the authenticated principal attached by the
  * guard. Downstream handlers read `req.user.id` etc.
  *
- * NOTE: `Phase 02` does NOT yet check session-revocation server-side. JWT
- * `exp` is the only freshness check; instant-revoke (session-epoch / per-user
- * version) is Phase 03's `REQ-AUTH-004`. Logout family-revokes the refresh
- * token, so a stolen access JWT survives only until `exp`.
+ * Phase 03 / Plan 04 (Truth 14) — every authed request now ALSO compares the
+ * JWT's `epoch` claim against the current `users.session_epoch` (Redis-cached
+ * via `SessionEpochCache`, TTL 60s). Mismatch → 401 AUTH_SESSION_REVOKED.
+ * This closes Phase 02's deferred REQ-AUTH-004 (instant access-token
+ * revocation): `revoke-all` bumps the column + busts the cache, so any
+ * outstanding token is rejected on its next request.
  */
 export interface AuthedRequest extends Request {
   user: { id: string; sessionId: string; familyId: string };
@@ -39,7 +43,10 @@ export interface AuthedRequest extends Request {
 export class JwtAuthGuard implements CanActivate {
   private readonly logger = new Logger(JwtAuthGuard.name);
 
-  constructor(private readonly jwt: JwtService) {}
+  constructor(
+    private readonly jwt: JwtService,
+    private readonly epochCache: SessionEpochCache,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<AuthedRequest>();
@@ -69,15 +76,33 @@ export class JwtAuthGuard implements CanActivate {
       void err;
     }
 
+    let claims: Awaited<ReturnType<JwtService["verifyAccessToken"]>>;
     try {
-      const claims = await this.jwt.verifyAccessToken(token);
-      req.user = { id: claims.sub, sessionId: claims.sid, familyId: claims.fam };
-      return true;
+      claims = await this.jwt.verifyAccessToken(token);
     } catch (err) {
       const reason = classifyJoseError(err);
       this.logger.debug({ evt: "auth.guard.deny", reason }, "auth.guard.deny");
       this.deny(reason);
     }
+
+    // Phase 03 / Plan 04 — Truth 14: compare JWT `epoch` against current
+    // `users.session_epoch` (Redis-cached, TTL 60s). Mismatch → AUTH_SESSION_REVOKED.
+    // Single read per request via `SessionEpochCache.get` (cache hit path is O(1)
+    // Redis GET; cold path coalesces concurrent callers to one DB query).
+    const currentEpoch = await this.epochCache.get(claims.sub);
+    if (claims.epoch !== currentEpoch) {
+      this.logger.debug(
+        { evt: "auth.guard.deny", reason: "session_revoked", sub: claims.sub },
+        "auth.guard.deny",
+      );
+      throw new HttpException(
+        { error: { code: ErrorCodes.AUTH_SESSION_REVOKED, message: "Session revoked" } },
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    req.user = { id: claims.sub, sessionId: claims.sid, familyId: claims.fam };
+    return true;
   }
 
   private deny(reason: string): never {

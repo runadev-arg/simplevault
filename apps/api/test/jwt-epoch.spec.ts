@@ -91,9 +91,16 @@ function makeDbStub(rows: RowMap): DbStub {
                       return [];
                     }
                     stub.selectCalls.push({ userId, ts: Date.now() });
-                    // Simulate DB latency so concurrent callers actually overlap.
-                    await new Promise<void>((r) => setTimeout(r, 5));
+                    // Snapshot the row value NOW (representing a snapshot read
+                    // in the DB transaction); then sleep to simulate latency.
+                    // This shape lets concurrent bumpEpoch races be observable:
+                    // the bump updates `rows` after this snapshot but before
+                    // the promise resolves — exactly the worst-case the
+                    // cache-busting strategy must handle. The next reader must
+                    // observe the post-bump value (because bust() DELs whatever
+                    // the in-flight handler eventually writes).
                     const e = rows.get(userId) ?? 0;
+                    await new Promise<void>((r) => setTimeout(r, 25));
                     return [{ e }];
                   },
                 };

@@ -15,6 +15,12 @@ export const ErrorCodes = {
   WEBAUTHN_CHALLENGE_INVALID: "E1012",
   WEBAUTHN_VERIFICATION_FAILED: "E1013",
   AUTH_2FA_NO_METHOD: "E1014",
+  // Phase 03 Plan 03 — TOTP replay-guard violation (Key Link 4).
+  AUTH_2FA_TOTP_REPLAY: "E1015",
+  // Phase 03 Plan 03 — TOTP issuance-nonce missing/expired/wrong-user.
+  AUTH_2FA_TOTP_ISSUANCE_INVALID: "E1016",
+  // Phase 03 Plan 04 — JWT epoch mismatch (revoke-all bumped users.session_epoch).
+  AUTH_SESSION_REVOKED: "E1017",
 
   // Vault (E2xxx)
   VAULT_NOT_FOUND: "E2001",

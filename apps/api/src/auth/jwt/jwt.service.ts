@@ -9,6 +9,13 @@ export interface AccessTokenClaims {
   sid: string;
   /** family id (UUID) — refresh-rotation lineage */
   fam: string;
+  /**
+   * session-epoch — `users.session_epoch` value at the moment the token was
+   * minted. `JwtAuthGuard` compares this against the current per-user epoch
+   * (Redis-cached, TTL 60s); mismatch → 401 AUTH_SESSION_REVOKED. Closes
+   * Phase-02 deferred REQ-AUTH-004 (instant access-token revocation).
+   */
+  epoch: number;
 }
 
 const KID = "primary";
@@ -80,7 +87,7 @@ export class JwtService implements OnModuleInit {
   }
 
   async signAccessToken(claims: AccessTokenClaims): Promise<string> {
-    return await new SignJWT({ sid: claims.sid, fam: claims.fam })
+    return await new SignJWT({ sid: claims.sid, fam: claims.fam, epoch: claims.epoch })
       .setProtectedHeader({ alg: ALG, kid: KID })
       .setSubject(claims.sub)
       .setIssuedAt()
@@ -93,10 +100,14 @@ export class JwtService implements OnModuleInit {
     if (typeof payload.sub !== "string" || typeof payload.sid !== "string" || typeof payload.fam !== "string") {
       throw new Error("malformed access token claims");
     }
+    if (typeof payload.epoch !== "number" || !Number.isInteger(payload.epoch) || payload.epoch < 0) {
+      throw new Error("malformed access token claims (epoch)");
+    }
     return {
       sub: payload.sub,
       sid: payload.sid,
       fam: payload.fam,
+      epoch: payload.epoch,
       iat: payload.iat ?? 0,
       exp: payload.exp ?? 0,
     };
