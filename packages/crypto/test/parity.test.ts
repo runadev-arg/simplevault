@@ -60,6 +60,7 @@ const BROWSER_ONLY_EXPECTED = [
   "generateMnemonic",
   "generateMnemonicAsync",
   "mnemonicToSeed",
+  "totpReady",
   "validateMnemonic",
   "verifyTotpCandidate",
 ].sort();

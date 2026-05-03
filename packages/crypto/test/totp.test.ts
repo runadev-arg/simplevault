@@ -13,13 +13,19 @@
  * Shared secret (ASCII): "12345678901234567890" (20 bytes).
  */
 
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
+import { ready } from "../src/argon2id.js";
 import {
   buildOtpauthUrl,
   computeTotpStep,
   verifyTotpCandidate,
 } from "../src/totp.js";
+
+beforeAll(async () => {
+  // libsodium's HMAC-SHA-1 + memcmp bindings need the WASM ready.
+  await ready();
+});
 
 const enc = new TextEncoder();
 const RFC_SECRET_20B = enc.encode("12345678901234567890");
