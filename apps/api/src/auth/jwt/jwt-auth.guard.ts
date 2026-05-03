@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 import { ErrorCodes } from "@simplevault/shared/errors";
 import type { Request } from "express";
+import { decodeJwt } from "jose";
 
 import { JwtService } from "./jwt.service.js";
 
@@ -46,6 +47,26 @@ export class JwtAuthGuard implements CanActivate {
     const token = extractBearer(header);
     if (!token) {
       this.deny("missing_bearer");
+    }
+
+    // Phase 03 — Key Link 5: reject any token that carries a `purpose` claim
+    // (those are step-up tokens; they MUST NOT be accepted as access tokens).
+    // Decode without verification to inspect the discriminator first; the full
+    // signature/expiry verification happens immediately after via
+    // `verifyAccessToken`.
+    try {
+      const unverified = decodeJwt(token);
+      if (unverified.purpose !== undefined) {
+        this.logger.debug(
+          { evt: "auth.guard.deny", reason: "non_access_token_purpose" },
+          "auth.guard.deny",
+        );
+        this.deny("non_access_token_purpose");
+      }
+    } catch (err) {
+      // Malformed JWT → fall through to the standard verify path which will
+      // raise the same uniform 401.
+      void err;
     }
 
     try {

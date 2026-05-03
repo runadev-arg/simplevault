@@ -11,6 +11,9 @@ export * from "./bip39.js";
 export * from "./key-hierarchy.js";
 export * from "./sealed-box.js";
 export * from "./sign.js";
+// Browser-only — Phase 03 TOTP (RFC 6238). Server NEVER imports this; do
+// NOT add to ./node.ts. Enforced by `test/parity.test.ts` snapshot.
+export * from "./totp.js";
 
 const notImplemented = (name: string): never => {
   throw new Error(`@simplevault/crypto browser.${name}() not yet implemented (Phase 02)`);

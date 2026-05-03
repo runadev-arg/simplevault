@@ -65,6 +65,20 @@ export class JwtService implements OnModuleInit {
     return this.accessTtlSec;
   }
 
+  /**
+   * Package-private accessor — exposes the symmetric secret to sibling
+   * services that sign tokens with the SAME key but different shape (e.g.
+   * `StepUpJwtService` for the 2FA step-up token). Phase 03 introduces
+   * step-up tokens that carry `purpose:"2fa-stepup"` and must not be
+   * accepted by `JwtAuthGuard` (which now rejects any token with a
+   * `purpose` claim — see jwt-auth.guard.ts). Sharing the secret keeps the
+   * secret-rotation surface to one variable; safety is enforced by the
+   * `purpose` discriminator.
+   */
+  exposeSecret(): Uint8Array {
+    return this.secret;
+  }
+
   async signAccessToken(claims: AccessTokenClaims): Promise<string> {
     return await new SignJWT({ sid: claims.sid, fam: claims.fam })
       .setProtectedHeader({ alg: ALG, kid: KID })

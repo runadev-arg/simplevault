@@ -49,15 +49,19 @@ const SHARED_EXPECTED = [
 ].sort();
 
 // Symbols intentionally exported ONLY from the browser barrel (because
-// they take password / secret_key / mnemonic as input — see node.ts).
+// they take password / secret_key / mnemonic / TOTP-secret as input — see
+// node.ts header).
 const BROWSER_ONLY_EXPECTED = [
+  "buildOtpauthUrl",
   "computeRecoveryLookupHash",
+  "computeTotpStep",
   "deriveMasterKek",
   "deriveRecoveryKek",
   "generateMnemonic",
   "generateMnemonicAsync",
   "mnemonicToSeed",
   "validateMnemonic",
+  "verifyTotpCandidate",
 ].sort();
 
 // Symbols intentionally exported ONLY from the node barrel (currently
