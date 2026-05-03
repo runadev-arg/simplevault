@@ -75,7 +75,12 @@ export class MethodsController {
     @Req() req: AuthedRequest,
     @Param("id", new ParseUUIDPipe({ version: "4" })) methodId: string,
   ): Promise<void> {
-    const result = await this.methods.remove(req.user.id, methodId);
+    // T2: removal-guard wired (Truth 10 + Phase 07 hand-off seam).
+    // Throws 409 AUTH_2FA_REMOVAL_BLOCKED when the user would be left with
+    // 0 active 2FA AND `userHasSharedVaultDependency(userId)` returns true.
+    // Phase 03 stub returns false unconditionally — exercised via the
+    // `2fa-removal.spec.ts` integration test that flips the dep to true.
+    const result = await this.methods.removeGuarded(req.user.id, methodId);
     if (!result) {
       // Truth 10: cross-user attempts (or non-existent ids) collapse to a
       // uniform 404. NEVER 403 — that would confirm the id exists.

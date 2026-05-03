@@ -21,6 +21,10 @@ export const ErrorCodes = {
   AUTH_2FA_TOTP_ISSUANCE_INVALID: "E1016",
   // Phase 03 Plan 04 — JWT epoch mismatch (revoke-all bumped users.session_epoch).
   AUTH_SESSION_REVOKED: "E1017",
+  // Phase 03 Plan 06 — DELETE /2fa/methods/:id would leave the user with 0
+  // active 2FA methods AND `userHasSharedVaultDependency(userId)` returns
+  // true (Phase 07 hand-off seam — currently always false).
+  AUTH_2FA_REMOVAL_BLOCKED: "E1018",
 
   // Vault (E2xxx)
   VAULT_NOT_FOUND: "E2001",

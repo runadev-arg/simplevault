@@ -1,9 +1,37 @@
-import { Injectable } from "@nestjs/common";
+import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import { schema } from "@simplevault/db";
+import { ErrorCodes } from "@simplevault/shared/errors";
 import type { TwoFaMethod } from "@simplevault/shared/zod";
 import { and, asc, count, eq } from "drizzle-orm";
 
 import { DbService } from "../../db/db.service.js";
+
+/**
+ * Phase 03 / Plan 06 / Truth 10 — Phase 07 hand-off seam.
+ *
+ * Returns `true` when the user has at least one shared-vault membership that
+ * REQUIRES 2FA to remain active. Phase 03 has no shared-vault concept yet;
+ * this stub always returns `false`. Phase 07 will replace the body with:
+ *
+ *   const r = await db.execute(sql`SELECT 1 FROM vault_members WHERE user_id = ${userId} LIMIT 1`);
+ *   return r.rows.length > 0;
+ *
+ * The integration test in `apps/api/test/2fa-removal.spec.ts` injects a
+ * stubbed implementation that returns `true` to verify the 409 path. The
+ * default-false implementation guarantees Phase-03 users can always remove
+ * their last 2FA method (no shared vaults exist to lock them in).
+ *
+ * The export is plumbed through MethodsService.removeGuarded as a function
+ * reference so the test can override at the service level (Vitest spy).
+ */
+export type SharedVaultDependencyCheck = (userId: string) => Promise<boolean>;
+
+export const userHasSharedVaultDependency: SharedVaultDependencyCheck = async (
+  _userId: string,
+): Promise<boolean> => {
+  // TODO(phase-07): replace with `SELECT EXISTS(SELECT 1 FROM vault_members WHERE user_id=$1)`.
+  return false;
+};
 
 /**
  * Phase 03 Plan 06 — 2FA method management primitives.
@@ -33,6 +61,13 @@ import { DbService } from "../../db/db.service.js";
  */
 @Injectable()
 export class MethodsService {
+  /**
+   * Mutable seam so the integration test can flip the dep stub to `true`
+   * without touching this module's source. Defaults to the module-level
+   * stub (always `false` in Phase 03).
+   */
+  sharedVaultDependencyCheck: SharedVaultDependencyCheck = userHasSharedVaultDependency;
+
   constructor(private readonly db: DbService) {}
 
   /**
@@ -137,5 +172,57 @@ export class MethodsService {
     if (totp.length > 0) return { kind: "totp" };
 
     return null;
+  }
+
+  /**
+   * Truth 10 removal-guard: deleting a method that would leave the user with
+   * 0 active 2FA AND `userHasSharedVaultDependency(userId)` returns `true`
+   * → 409 `AUTH_2FA_REMOVAL_BLOCKED` with body
+   * `{error:{code, message, data:{requires:"shared_vault_2fa"}}}`. Otherwise
+   * proceeds with `remove(...)` (which itself returns null on cross-user /
+   * non-existent — caller maps to 404).
+   *
+   * Order:
+   *   1. Resolve current count (`countActive`).
+   *   2. If `countAfter = current - 1 === 0` AND dep-stub returns true:
+   *      throw 409 BEFORE running the DELETE — preserves the method for the
+   *      user. NOTE: TOCTOU between count and delete is acceptable here:
+   *      Phase 03's stub always returns false (no real 409 path); Phase 07
+   *      will replace the function body — at that point a future hardening
+   *      pass can wrap both queries in a single transaction. Documented
+   *      inline so Phase 07 doesn't have to re-derive the rationale.
+   *   3. Run `remove(...)` and return its result.
+   *
+   * Returns `null` for cross-user / non-existent (controller → 404).
+   * Returns `{kind}` on successful delete.
+   */
+  async removeGuarded(
+    userId: string,
+    methodId: string,
+  ): Promise<{ kind: "webauthn" | "totp" } | null> {
+    const before = await this.countActive(userId);
+    if (before === 0) {
+      // No method exists — fall through to `remove` which will return null
+      // and the caller maps to 404. Anti-enumeration: same response as
+      // cross-user / unknown id.
+      return this.remove(userId, methodId);
+    }
+    const countAfter = before - 1;
+    if (countAfter === 0) {
+      const dep = await this.sharedVaultDependencyCheck(userId);
+      if (dep) {
+        throw new HttpException(
+          {
+            error: {
+              code: ErrorCodes.AUTH_2FA_REMOVAL_BLOCKED,
+              message: "Cannot remove last 2FA method while shared-vault membership requires it",
+              data: { requires: "shared_vault_2fa" },
+            },
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
+    }
+    return this.remove(userId, methodId);
   }
 }
