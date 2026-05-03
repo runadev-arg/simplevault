@@ -9,17 +9,17 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import { ErrorCodes } from "@simplevault/shared/errors";
 import { schema } from "@simplevault/db";
-import { eq } from "drizzle-orm";
+import { ErrorCodes } from "@simplevault/shared/errors";
 import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/types";
+import { eq } from "drizzle-orm";
 
 import { JwtAuthGuard, type AuthedRequest } from "../../auth/jwt/jwt-auth.guard.js";
 import { RateLimits } from "../../common/throttler.config.js";
 import { DbService } from "../../db/db.service.js";
 
-import { FinishRegisterSchema } from "./webauthn.dto.js";
 import { WebauthnRegisterService } from "./webauthn-register.service.js";
+import { FinishRegisterSchema } from "./webauthn.dto.js";
 
 @Controller("2fa/webauthn")
 @UseGuards(JwtAuthGuard)

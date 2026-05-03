@@ -8,7 +8,6 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { schema } from "@simplevault/db";
 import { ErrorCodes } from "@simplevault/shared/errors";
-import { and, eq, sql } from "drizzle-orm";
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -18,6 +17,7 @@ import type {
   PublicKeyCredentialCreationOptionsJSON,
   RegistrationResponseJSON,
 } from "@simplewebauthn/types";
+import { and, eq, sql } from "drizzle-orm";
 
 import { AuditAction, AuditEventService } from "../../common/audit-events.js";
 import { DbService } from "../../db/db.service.js";
