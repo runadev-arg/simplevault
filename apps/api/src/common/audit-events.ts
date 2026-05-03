@@ -44,6 +44,7 @@ export const AuditAction = {
   // `auth.<verb>.<outcome>` namespace established by Phase-02 events; targetId
   // is the sessionId (revoked) or userId (revoke_all).
   SessionRevoked: "auth.session.revoked",
+  SessionRevokeAll: "auth.session.revoke_all",
 } as const;
 
 export type AuditActionValue = (typeof AuditAction)[keyof typeof AuditAction];

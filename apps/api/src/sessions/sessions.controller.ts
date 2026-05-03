@@ -7,17 +7,23 @@ import {
   NotFoundException,
   Param,
   ParseUUIDPipe,
+  Post,
   Req,
+  Res,
   UseGuards,
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import { ErrorCodes } from "@simplevault/shared/errors";
 import { SessionListResponseSchema, type SessionListItem } from "@simplevault/shared/zod";
+import type { Response } from "express";
 
 import { JwtAuthGuard, type AuthedRequest } from "../auth/jwt/jwt-auth.guard.js";
 import { RateLimits } from "../common/throttler.config.js";
 
 import { SessionsService } from "./sessions.service.js";
+
+/** Match the cookie name + clear semantics used by the logout controller. */
+const REFRESH_COOKIE = "__Host-refresh";
 
 /**
  * Phase 03 / Plan 05 — `/sessions` controller (Truths 11–13).
@@ -77,5 +83,45 @@ export class SessionsController {
     }
     // 204, no body — keeps the response identical for "I revoked my current
     // session" vs "I revoked a sibling session".
+  }
+
+  // ---------------------------------------------------------------- revoke-all
+
+  /**
+   * Truth 13: family-revoke EVERY non-revoked session row for the caller AND
+   * bump `users.session_epoch` (via SessionService.bumpEpoch — Plan 04). The
+   * caller's own access token is invalidated as soon as the next request
+   * lands (cache-bust is synchronous). The refresh cookie is also cleared
+   * here; the user will need to re-login from this device.
+   *
+   * Throttled at 5/min/user (post-Plan-09 — see throttler.config.ts comment
+   * for the IP-keyed fallback during the lag).
+   */
+  @Post("revoke-all")
+  @HttpCode(HttpStatus.OK)
+  @Throttle({
+    [RateLimits.sessionsRevokeAllUser.name]: {
+      limit: RateLimits.sessionsRevokeAllUser.limit,
+      ttl: RateLimits.sessionsRevokeAllUser.ttl,
+    },
+  })
+  async revokeAll(
+    @Req() req: AuthedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ revokedCount: number }> {
+    const requestId = req.headers["x-request-id"];
+    const result = await this.sessions.revokeAll(req.user.id, {
+      ...(typeof requestId === "string" ? { requestId } : {}),
+    });
+    // Clear the refresh cookie — the user is logging themselves out from
+    // THIS device too. Mirrors the logout controller's clear semantics.
+    res.cookie(REFRESH_COOKIE, "", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      path: "/",
+      maxAge: 0,
+    });
+    return result;
   }
 }

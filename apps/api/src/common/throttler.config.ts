@@ -75,6 +75,11 @@ export const RateLimits = {
     limit: intEnv(process.env.SESSIONS_REVOKE_RATE_LIMIT, 30),
     ttl: 60_000,
   },
+  sessionsRevokeAllUser: {
+    name: "sessions-revoke-all-user",
+    limit: intEnv(process.env.SESSIONS_REVOKE_ALL_RATE_LIMIT, 5),
+    ttl: 60_000,
+  },
 } as const;
 
 /**
@@ -117,7 +122,8 @@ export class SimpleVaultThrottlerGuard extends ThrottlerGuard {
       name === "me-user" ||
       name === "2fa-register-user" ||
       name === "sessions-list-user" ||
-      name === "sessions-revoke-user";
+      name === "sessions-revoke-user" ||
+      name === "sessions-revoke-all-user";
     if (userKeyed && typeof req.user?.id === "string") {
       tracker = `user:${req.user.id}`;
     } else if (name === "login-email") {

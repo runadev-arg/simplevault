@@ -61,6 +61,33 @@ export class SessionsService {
     return true;
   }
 
-  // `revokeAll` lives on a follow-up commit (T2) along with the bumpEpoch
-  // wiring + cookie-clear behaviour.
+  /**
+   * Plan 05 Truth 13 — revoke every non-revoked session for the caller AND
+   * bump `users.session_epoch` so every outstanding access token for the
+   * user fails closed on its next request.
+   *
+   * Returns `{ revokedCount }` for the controller to surface in the JSON
+   * body. Always emits the `auth.session.revoke_all` audit event (even when
+   * revokedCount === 0 — the user explicitly invoked the endpoint, the
+   * audit row records the intent regardless of outcome).
+   */
+  async revokeAll(
+    userId: string,
+    audit: { ipHashB64?: string; uaFamily?: string; requestId?: string },
+  ): Promise<{ revokedCount: number }> {
+    const result = await this.sessions.revokeAllForUser(userId);
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.SessionRevokeAll,
+      actorUserId: userId,
+      // targetId = userId per audit-events.ts comment ("targetId is the
+      // sessionId (revoked) or userId (revoke_all)").
+      targetId: userId,
+      outcome: "ok",
+      ...(audit.ipHashB64 !== undefined ? { ipHashB64: audit.ipHashB64 } : {}),
+      ...(audit.uaFamily !== undefined ? { uaFamily: audit.uaFamily } : {}),
+      ...(audit.requestId !== undefined ? { requestId: audit.requestId } : {}),
+      data: { revokedCount: result.revokedCount },
+    });
+    return result;
+  }
 }

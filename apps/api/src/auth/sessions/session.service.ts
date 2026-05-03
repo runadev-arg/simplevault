@@ -411,8 +411,40 @@ export class SessionService implements OnModuleInit {
     return { familyId: row.familyId, revokedCount };
   }
 
-  // `revokeAllForUser` lands in Plan 05 / T2 alongside the controller's
-  // POST /sessions/revoke-all + audit-event extension.
+  /**
+   * Phase 03 / Plan 05 (Truth 13) — revoke EVERY non-revoked session row for
+   * `userId` AND bump `users.session_epoch` so all outstanding access tokens
+   * for the user fail closed within ≤ next-request latency (cache miss path)
+   * or ≤ TTL (60s) on the worst-case Redis-outage path. See Plan 04 SUMMARY's
+   * "worst-case revocation latency" table.
+   *
+   * Order is load-bearing:
+   *   1. Family-revoke every non-revoked refresh row (single UPDATE).
+   *   2. bumpEpoch (which is itself UPDATE-then-DEL ordered — Plan 04).
+   * Reversing — bump then revoke — would briefly have a window where the
+   * epoch is bumped but refresh rows are still alive: a fresh /auth/refresh
+   * with the old cookie would mint a NEW access token under the new epoch,
+   * defeating the revoke. Doing UPDATE-refresh-rows first slams that window
+   * shut.
+   *
+   * Returns `{ revokedCount }` so the controller can surface it in the
+   * response body and audit log.
+   */
+  async revokeAllForUser(userId: string): Promise<{ revokedCount: number }> {
+    const result = await this.db.db.execute<{ id: string }>(sql`
+      UPDATE ${schema.userSessions}
+      SET revoked_at = now()
+      WHERE user_id = ${userId} AND revoked_at IS NULL
+      RETURNING id
+    `);
+    const revokedCount = result.rows.length;
+    // bumpEpoch (Plan 04): UPDATE users.session_epoch += 1, then DEL the
+    // Redis cache key. Synchronous on the request path — by the time this
+    // returns the cache is empty and the next /me by this user will read
+    // the new epoch from DB and reject the old access token.
+    await this.bumpEpoch(userId);
+    return { revokedCount };
+  }
 
   /** Throws 401 with the canonical AUTH_INVALID_CREDENTIALS shape. */
   static throw401(): never {
