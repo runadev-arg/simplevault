@@ -47,9 +47,17 @@ docker compose up -d postgres redis
 pnpm dev   # turbo runs apps/api on :3001 and apps/web on :3000 with watch
 ```
 
-> Note: `pnpm dev` reads env vars from your shell. Either `set -a; source .env; set +a`
-> before running, or use a tool like `dotenvx`/`direnv`. The compose-up path above
-> injects them via `env_file: .env` automatically.
+> `pnpm dev` auto-loads `.env` via `dotenv-cli` (wired into the api +
+> web `dev` scripts). The compose-up path above injects the same vars
+> via `env_file: .env`, so both flows agree.
+>
+> **Caveat for native dev**: `docker-compose.yml` deliberately does NOT
+> expose postgres (5432) or redis (6379) on the host (backend network
+> only). For `pnpm dev` to actually CONNECT to them you need either:
+> (a) a `docker-compose.override.yml` that exposes the ports, OR
+> (b) postgres + redis installed natively (homebrew, asdf, etc.). The
+> api will boot past env-var checks regardless — connection failures
+> only surface when the first request lands.
 
 ## Database migrations
 
