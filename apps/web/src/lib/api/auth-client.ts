@@ -165,10 +165,18 @@ export class AuthClientResponseError extends Error {
   }
 }
 
-async function request<T>(
+/**
+ * Shared HTTP helper used by `auth-client.ts`, `sessions-client.ts` (Plan 11),
+ * and `twofa-client.ts` (Plan 10). Exported so the Phase-03 sibling clients
+ * don't have to duplicate fetch/Zod/error-envelope plumbing.
+ *
+ * `accessToken` is optional — pre-auth flows (login, refresh, signup) leave
+ * it undefined; authed routes pass `useAuth().accessToken` through.
+ */
+export async function request<T>(
   path: string,
   opts: {
-    method: "GET" | "POST";
+    method: "GET" | "POST" | "DELETE";
     body?: unknown;
     schema: z.ZodSchema<T>;
     accessToken?: string | null;
