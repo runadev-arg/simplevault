@@ -295,7 +295,10 @@ All findings reported by security auditor agents (manual or automated). Tracked 
 - **Description:** `SimpleVaultThrottlerGuard` is registered as a **global** `APP_GUARD` while `JwtAuthGuard` is route-scoped via `@UseGuards(JwtAuthGuard)` on `MeController`. NestJS executes global guards BEFORE route-scoped guards, so when the throttler's `generateKey` reads `req.user?.id` for the `me-user` ceiling, the JWT guard has not yet attached the principal — `req.user` is undefined and the code falls through to the IP-keyed default (`return ${name}:${suffix}` where `suffix` is the IP tracker). Net effect: REQ-RATELIMIT-006's user-keying is silently NOT in effect on `/me`; the limit is enforced per-IP instead. Strictly LOOSER than intent (one user behind a NAT shares a budget with neighbours; a stolen JWT used from many IPs gets the full per-IP budget multiple times rather than a single per-user budget). Not a bypass, but the documented behaviour is wrong.
 - **Reproduction:** `curl -i -H "Authorization: Bearer <jwt>" /me` 101 times from a single IP using the SAME JWT → expect the 101st request to 429. Then run from a SECOND IP using the same JWT — observe the second IP gets a fresh 100-request budget (would be 0 under correct user-keying because the user already exhausted it).
 - **Recommendation:** Either (a) apply `JwtAuthGuard` globally for any route that has a user-keyed throttler (move JWT-guard to APP_GUARD with a path-allow-list for `/auth/*` `/health` `/invite/redeem`) so it runs before throttler; or (b) split `me-user` into a separate guard chain that runs JwtAuthGuard first, then a route-local throttler subclass; or (c) accept the IP-keyed behaviour and update REQ-RATELIMIT-006 + 02-09-SUMMARY to reflect it. Option (a) is the least surprising long-term — global JWT guard + `@Public()` decorator for opt-out is standard NestJS pattern.
-- **Status:** OPEN
+- **Status:** FIXED-PENDING-VERIFICATION
+- **Resolved-by-commit:** 8e3215c (Plan 03-09 T2; supporting decorator in 859c7e4)
+- **Fix summary:** Adopted Recommendation (a). `JwtAuthGuard` registered as APP_GUARD before `SimpleVaultThrottlerGuard` in `app.module.ts`; `@Public()` decorator opts out the 10 truly-public routes (`/health`, `/invite/redeem`, `/auth/{signup,login,refresh,logout,params}`, `/2fa/webauthn/{begin,finish}-auth`, `/2fa/totp/verify`). Step-up routes combine `@Public()` with `Require2FAStepUpGuard` for their token-shape mismatch with `JwtAuthGuard`.
+- **Verified-by:** _pending live re-run by rate-limit-dos-auditor on Plan 12 / `/gsd:verify-work 3` (101 `/me` from IP-1 then one from IP-2 with the same JWT — second IP must 429)_
 - **Blocks-phase:** NO
 
 ### FINDING-0022 — `login-email` keying does not bound input length (Redis-key-flooding DoS surface)
@@ -310,7 +313,10 @@ All findings reported by security auditor agents (manual or automated). Tracked 
 - **Recommendation:** Two-part fix:
   1. In `generateKey`, cap the email substring used for keying: e.g., `tracker = "em:" + sha256(body.email.toLowerCase()).slice(0,16)` — fixed-length, leaks no PII to Redis, prevents key-flooding amplification.
   2. Document at the top of the throttler config that the throttler reads body BEFORE validation, so future ceilings keyed off body fields must also bound their input.
-- **Status:** OPEN
+- **Status:** FIXED-PENDING-VERIFICATION
+- **Resolved-by-commit:** a4283a0 (Plan 03-09 T3)
+- **Fix summary:** Both parts of the recommendation applied. `generateKey` now keys `login-email` via `createHash("sha256").update(email).digest("hex").slice(0,16)` — fixed 16-char tracker. A header comment block on `apps/api/src/common/throttler.config.ts` documents that the throttler runs BEFORE Zod validation pipes, so any future ceiling keyed off `req.body` MUST hash + slice. Defence-in-depth via Plan 01's `varchar(254)` storage cap (FINDING-0017) remains in place.
+- **Verified-by:** _pending live re-run by rate-limit-dos-auditor on Plan 12 / `/gsd:verify-work 3` (5 `POST /auth/login` with 4KB random emails; `redis-cli --scan --pattern 'login-email:em:*'` must return 5 keys each shaped `login-email:em:<16-hex>`)_
 - **Blocks-phase:** NO
 
 ### FINDING-0023 — throttler storage-error catch regex is fragile (silent self-DoS path on non-matching ioredis errors)
