@@ -2,6 +2,7 @@
 
 import type { JSX } from "react";
 
+import { RevokeAllButton } from "./revoke-all-button";
 import { SessionList } from "./session-list";
 
 /**
@@ -29,6 +30,7 @@ export default function SessionsPage(): JSX.Element {
         </p>
       </header>
       <SessionList />
+      <RevokeAllButton />
     </main>
   );
 }
