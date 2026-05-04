@@ -5,6 +5,7 @@ import type { Request, Response } from "express";
 import { AuditAction, AuditEventService } from "../../common/audit-events.js";
 import { RateLimits } from "../../common/throttler.config.js";
 import { JwtService } from "../jwt/jwt.service.js";
+import { Public } from "../jwt/public.decorator.js";
 import { SessionService } from "../sessions/session.service.js";
 
 const REFRESH_COOKIE = "__Host-refresh";
@@ -19,6 +20,7 @@ export class RefreshController {
   ) {}
 
   @Post("refresh")
+  @Public()
   @HttpCode(HttpStatus.OK)
   @Throttle({ [RateLimits.refreshIp.name]: { limit: RateLimits.refreshIp.limit, ttl: RateLimits.refreshIp.ttl } })
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<unknown> {

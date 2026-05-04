@@ -4,6 +4,7 @@ import type { Request, Response } from "express";
 
 import { AuditAction, AuditEventService } from "../../common/audit-events.js";
 import { RateLimits } from "../../common/throttler.config.js";
+import { Public } from "../jwt/public.decorator.js";
 import { SessionService } from "../sessions/session.service.js";
 
 const REFRESH_COOKIE = "__Host-refresh";
@@ -14,6 +15,7 @@ export class LogoutController {
   constructor(private readonly sessions: SessionService) {}
 
   @Post("logout")
+  @Public()
   @HttpCode(HttpStatus.OK)
   @Throttle({ [RateLimits.logoutIp.name]: { limit: RateLimits.logoutIp.limit, ttl: RateLimits.logoutIp.ttl } })
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<unknown> {

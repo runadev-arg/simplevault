@@ -18,6 +18,7 @@ import type { Request, Response } from "express";
 
 import { JwtAuthGuard, type AuthedRequest } from "../../auth/jwt/jwt-auth.guard.js";
 import { JwtService } from "../../auth/jwt/jwt.service.js";
+import { Public } from "../../auth/jwt/public.decorator.js";
 import { SessionService } from "../../auth/sessions/session.service.js";
 import { AuditAction, AuditEventService } from "../../common/audit-events.js";
 import { RateLimits } from "../../common/throttler.config.js";
@@ -119,6 +120,10 @@ export class TotpController {
   // ---------------------------------------------------------------- verify
 
   @Post("verify")
+  // Plan 09 — opt out of the global JwtAuthGuard; this route carries a
+  // step-up token (purpose:"2fa-stepup"), not an access token, and is
+  // authenticated by Require2FAStepUpGuard below.
+  @Public()
   @UseGuards(Require2FAStepUpGuard)
   @HttpCode(HttpStatus.OK)
   @Throttle({

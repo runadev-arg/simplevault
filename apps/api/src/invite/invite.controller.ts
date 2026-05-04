@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, HttpCode, HttpStatus, Post } fro
 import { Throttle } from "@nestjs/throttler";
 import { ErrorCodes } from "@simplevault/shared/errors";
 
+import { Public } from "../auth/jwt/public.decorator.js";
 import { RateLimits } from "../common/throttler.config.js";
 
 import { InviteRedeemSchema } from "./invite.dto.js";
@@ -12,6 +13,7 @@ export class InviteController {
   constructor(private readonly invites: InviteService) {}
 
   @Post("redeem")
+  @Public()
   @HttpCode(HttpStatus.OK)
   // 30 / IP / hour — lookup is cheap; advisory ceiling against scraping.
   @Throttle({ [RateLimits.inviteRedeemIp.name]: { limit: RateLimits.inviteRedeemIp.limit, ttl: RateLimits.inviteRedeemIp.ttl } })

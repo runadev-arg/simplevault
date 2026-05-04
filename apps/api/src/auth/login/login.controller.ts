@@ -18,6 +18,7 @@ import type { Request, Response } from "express";
 import { AuditAction, AuditEventService } from "../../common/audit-events.js";
 import { RateLimits } from "../../common/throttler.config.js";
 import { CryptoService } from "../../crypto/crypto.service.js";
+import { Public } from "../jwt/public.decorator.js";
 import { SessionService } from "../sessions/session.service.js";
 
 import { LoginSchema } from "./login.dto.js";
@@ -40,6 +41,7 @@ export class LoginController {
    * the login verifier. No per-user salt here (anti-enumeration).
    */
   @Get("params")
+  @Public()
   @Throttle({ [RateLimits.authParamsIp.name]: { limit: RateLimits.authParamsIp.limit, ttl: RateLimits.authParamsIp.ttl } })
   params(): {
     argon2Params: { memoryKiB: number; iterations: number; parallelism: 1 };
@@ -58,6 +60,7 @@ export class LoginController {
   }
 
   @Post("login")
+  @Public()
   @HttpCode(HttpStatus.OK)
   // Both IP and email keyed — REQ-RATELIMIT-002.
   @Throttle({

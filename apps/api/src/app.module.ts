@@ -4,6 +4,7 @@ import { APP_GUARD } from "@nestjs/core";
 import { LoggerModule } from "nestjs-pino";
 
 import { AuthModule } from "./auth/auth.module.js";
+import { JwtAuthGuard } from "./auth/jwt/jwt-auth.guard.js";
 import { SimpleVaultThrottlerGuard, ThrottlerConfigModule } from "./common/throttler.config.js";
 import { CryptoModule } from "./crypto/crypto.module.js";
 import { DbModule } from "./db/db.module.js";
@@ -154,6 +155,16 @@ const PINO_REDACT_PATHS = [
     // deletes both this conditional spread and the module as its first commit.
     ...(process.env.EXPOSE_TEST_ROUTES === "1" ? [VaultProbeModule] : []),
   ],
-  providers: [{ provide: APP_GUARD, useClass: SimpleVaultThrottlerGuard }],
+  // ORDER IS LOAD-BEARING. APP_GUARDs run in registration order; the next
+  // one only fires if the previous allowed. Closing FINDING-0021 (Phase 03
+  // Plan 09) requires JwtAuthGuard to populate `req.user` BEFORE
+  // SimpleVaultThrottlerGuard's `generateKey` runs — otherwise every
+  // user-keyed ceiling silently falls back to IP-keying. Truly-public
+  // routes opt out via `@Public()`; step-up routes do the same and
+  // authenticate via Require2FAStepUpGuard instead.
+  providers: [
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: SimpleVaultThrottlerGuard },
+  ],
 })
 export class AppModule {}

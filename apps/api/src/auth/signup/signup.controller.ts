@@ -3,6 +3,7 @@ import { Throttle } from "@nestjs/throttler";
 import { ErrorCodes } from "@simplevault/shared/errors";
 
 import { RateLimits } from "../../common/throttler.config.js";
+import { Public } from "../jwt/public.decorator.js";
 
 import { SignupSchema } from "./signup.dto.js";
 import { SignupService } from "./signup.service.js";
@@ -12,6 +13,7 @@ export class SignupController {
   constructor(private readonly signupSvc: SignupService) {}
 
   @Post("signup")
+  @Public()
   @HttpCode(HttpStatus.CREATED)
   // REQ-RATELIMIT-003 — 3 signups / IP / hour. Redis-backed, shared across replicas.
   @Throttle({ [RateLimits.signupIp.name]: { limit: RateLimits.signupIp.limit, ttl: RateLimits.signupIp.ttl } })

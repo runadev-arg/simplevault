@@ -14,6 +14,7 @@ import { ErrorCodes } from "@simplevault/shared/errors";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/types";
 import type { Response } from "express";
 
+import { Public } from "../../auth/jwt/public.decorator.js";
 import { SessionService } from "../../auth/sessions/session.service.js";
 import { RateLimits } from "../../common/throttler.config.js";
 import { Require2FAStepUpGuard, type StepUpRequest } from "../step-up/step-up.guard.js";
@@ -39,7 +40,11 @@ interface FinishAuthResponseBody {
   wrappedUserKxSk: string;
 }
 
+// Plan 09 — class-level @Public() opts the begin-auth + finish-auth pair out
+// of the global JwtAuthGuard. Both routes carry a step-up token instead of
+// an access token, and Require2FAStepUpGuard provides the actual auth check.
 @Controller("2fa/webauthn")
+@Public()
 @UseGuards(Require2FAStepUpGuard)
 export class WebauthnAuthController {
   constructor(
