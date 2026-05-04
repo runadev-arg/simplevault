@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { ThrottlerStorageRedisService } from "@nest-lab/throttler-storage-redis";
 import { type ExecutionContext, Injectable, Logger } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
@@ -8,6 +10,18 @@ import {
   type ThrottlerModuleOptions,
 } from "@nestjs/throttler";
 import { Redis } from "ioredis";
+
+// IMPORTANT (Phase 03 / Plan 09 — FINDING-0022 fix). The throttler runs
+// BEFORE Nest's validation pipes (guards execute before pipes). That means
+// any field this file reads from `req.body` is UNVALIDATED — an attacker can
+// post arbitrary lengths or types. Every key derived from request input
+// MUST be bounded to a fixed length BEFORE being used as a Redis key (e.g.
+// hash + slice). Otherwise Redis memory grows linearly with attacker
+// input — see FINDING-0022 for the original report. The defence-in-depth
+// second layer is the storage cap on `users.email` (varchar 254, FINDING
+// 0017 fix landed in Plan 01); the cap on the wire was added to LoginSchema
+// + SignupSchema in Plan 01 too, but Zod runs AFTER guards, so we still
+// can't trust it here.
 
 /**
  * Throttler ceilings (REQ-RATELIMIT-001..006 + 02-09 plan).
@@ -145,7 +159,15 @@ export class SimpleVaultThrottlerGuard extends ThrottlerGuard {
     } else if (name === "login-email") {
       const body = req.body;
       const email = typeof body?.email === "string" ? body.email.toLowerCase() : "no-email";
-      tracker = `em:${email}`;
+      // FINDING-0022 fix (Plan 09): hash + slice to bound the Redis key
+      // length and remove the lowercased-email PII from the key. 16 hex chars
+      // = 64 bits of collision resistance — at our ≤50-user scale, accidental
+      // collisions are negligible AND the throttle would only be tightened by
+      // a colliding pair (false-positive 429), never loosened. Length is fixed
+      // at 16 regardless of input — caps Redis memory growth from a flood of
+      // arbitrary-length email values.
+      const hashed = createHash("sha256").update(email).digest("hex").slice(0, 16);
+      tracker = `em:${hashed}`;
     }
     return `${name}:${tracker}`;
   }
