@@ -6,6 +6,7 @@ import {
   Injectable,
   Logger,
 } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
 import { ErrorCodes } from "@simplevault/shared/errors";
 import type { Request } from "express";
 import { decodeJwt } from "jose";
@@ -13,6 +14,7 @@ import { decodeJwt } from "jose";
 import { SessionEpochCache } from "../sessions/session-epoch.cache.js";
 
 import { JwtService } from "./jwt.service.js";
+import { IS_PUBLIC_KEY } from "./public.decorator.js";
 
 /**
  * Augmented Express request with the authenticated principal attached by the
@@ -46,9 +48,24 @@ export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly epochCache: SessionEpochCache,
+    private readonly reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Phase 03 / Plan 09 — `@Public()` opt-out short-circuits BEFORE any
+    // bearer-token inspection. Required because this guard is registered
+    // as APP_GUARD in `app.module.ts`, which means it runs against every
+    // route — including the truly-public ones (/health, /auth/login,
+    // /auth/refresh, /auth/logout, /auth/params, /auth/signup,
+    // /invite/redeem) and the step-up routes that authenticate via
+    // `Require2FAStepUpGuard` instead. Method-level `@Public()` overrides
+    // any class-level value (NestJS `getAllAndOverride` semantics).
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) return true;
+
     const req = context.switchToHttp().getRequest<AuthedRequest>();
     const header = req.headers.authorization;
     const token = extractBearer(header);

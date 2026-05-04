@@ -15,6 +15,7 @@
  *   7. bumpEpoch racing concurrent reads leaves cache holding the NEW epoch (not the old).
  *   8. bumpEpoch on user A does not affect user B's cache.
  */
+import { Reflector } from "@nestjs/core";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import { JwtService } from "../src/auth/jwt/jwt.service.js";
@@ -168,7 +169,10 @@ async function makeKit(): Promise<TestKit> {
     db.__nextUserId = userId;
   };
 
-  const guard = new JwtAuthGuard(jwt, cache);
+  // Plan 09 — JwtAuthGuard now also takes a Reflector to read @Public()
+  // metadata. The unit-test guard never sets that metadata, so a vanilla
+  // Reflector returns `undefined` for IS_PUBLIC_KEY → the auth path runs.
+  const guard = new JwtAuthGuard(jwt, cache, new Reflector());
 
   // bumpEpoch helper — mirrors what session.service.bumpEpoch will do.
   async function bumpEpoch(userId: string): Promise<void> {
@@ -186,14 +190,22 @@ async function makeKit(): Promise<TestKit> {
 /** Minimal ExecutionContext stub for guard.canActivate(). */
 function ctxWithBearer(token: string): {
   switchToHttp: () => { getRequest: () => { headers: { authorization: string }; user?: unknown } };
+  getHandler: () => unknown;
+  getClass: () => unknown;
 } {
   const req: { headers: { authorization: string }; user?: unknown } = {
     headers: { authorization: `Bearer ${token}` },
   };
+  // Plan 09 — Reflector.getAllAndOverride([handler, class]) is invoked first;
+  // anonymous markers without IS_PUBLIC_KEY metadata return undefined (falsy),
+  // so the auth path proceeds.
+  const marker = (): void => undefined;
   return {
     switchToHttp: () => ({
       getRequest: () => req,
     }),
+    getHandler: () => marker,
+    getClass: () => marker,
   };
 }
 
