@@ -183,6 +183,9 @@ importers:
       '@simplevault/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@simplewebauthn/browser':
+        specifier: ^11
+        version: 11.0.0
       libsodium-wrappers-sumo:
         specifier: ^0.7.15
         version: 0.7.16(patch_hash=3gphgfgn2w2rjei3afl4whv2p4)
@@ -1670,6 +1673,9 @@ packages:
 
   '@rushstack/eslint-patch@1.16.1':
     resolution: {integrity: sha512-TvZbIpeKqGQQ7X0zSCvPH9riMSFQFSggnfBjFZ1mEoILW+UuXCKwOoPcgjMwiUtRqFZ8jWhPJc4um14vC6I4ag==}
+
+  '@simplewebauthn/browser@11.0.0':
+    resolution: {integrity: sha512-KEGCStrl08QC2I561BzxqGiwoknblP6O1YW7jApdXLPtIqZ+vgJYAv8ssLCdm1wD8HGAHd49CJLkUF8X70x/pg==}
 
   '@simplewebauthn/server@11.0.0':
     resolution: {integrity: sha512-zu8dxKcPiRUNSN2kmrnNOzNbRI8VaR/rL4ENCHUfC6PEE7SAAdIql9g5GBOd/wOVZolIsaZz3ccFxuGoVP0iaw==}
@@ -5921,6 +5927,10 @@ snapshots:
   '@rtsao/scc@1.1.0': {}
 
   '@rushstack/eslint-patch@1.16.1': {}
+
+  '@simplewebauthn/browser@11.0.0':
+    dependencies:
+      '@simplewebauthn/types': 11.0.0
 
   '@simplewebauthn/server@11.0.0':
     dependencies:
