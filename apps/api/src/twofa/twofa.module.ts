@@ -11,6 +11,7 @@ import {
   Require2FAGuard,
 } from "./require-2fa.guard.js";
 import { StepUpJwtService } from "./step-up/step-up-jwt.service.js";
+import { StepUpMaterialController } from "./step-up/step-up-material.controller.js";
 import { Require2FAStepUpGuard } from "./step-up/step-up.guard.js";
 import { TotpController } from "./totp/totp.controller.js";
 import { TotpService } from "./totp/totp.service.js";
@@ -46,6 +47,7 @@ import { WebauthnRegisterService } from "./webauthn/webauthn-register.service.js
     WebauthnAuthController,
     TotpController,
     MethodsController,
+    StepUpMaterialController,
   ],
   providers: [
     StepUpJwtService,

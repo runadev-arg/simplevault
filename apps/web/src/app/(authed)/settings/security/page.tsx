@@ -4,6 +4,7 @@ import type { JSX } from "react";
 import { useState } from "react";
 
 import { EnrollPasskeyButton } from "./enroll-passkey-button";
+import { EnrollTotpFlow } from "./enroll-totp-flow";
 import { MethodList } from "./method-list";
 
 /**
@@ -78,9 +79,7 @@ export default function SecuritySettingsPage(): JSX.Element {
           Compatible with Google Authenticator, 1Password, Authy, and any
           other TOTP / RFC 6238 app.
         </p>
-        <p className="text-sm italic text-zinc-500">
-          Enrolment flow is wired in the next commit (Plan 03-10 T3).
-        </p>
+        <EnrollTotpFlow onEnrolled={refresh} />
       </section>
     </main>
   );

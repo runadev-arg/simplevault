@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { JSX, SyntheticEvent } from "react";
 import { Suspense, useEffect, useState } from "react";
 
@@ -47,6 +47,7 @@ import {
 
 function LoginPageInner(): JSX.Element {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const justSignedUp = searchParams.get("signed_up") === "1";
 
   const [email, setEmail] = useState("");
@@ -152,8 +153,7 @@ function LoginPageInner(): JSX.Element {
         // Stash the step-up token + flags via sessionStorage so the
         // /login/2fa page can pick them up after the navigation. The
         // step-up token is short-lived (default 120s) and authorises
-        // only /2fa/* — sessionStorage is acceptable for this brief
-        // hand-off (Plan 10 may revisit).
+        // only /2fa/*.
         try {
           sessionStorage.setItem(
             "sv:step-up",
@@ -163,15 +163,23 @@ function LoginPageInner(): JSX.Element {
             }),
           );
         } catch {
-          // sessionStorage may be disabled; Plan 10 must handle the
+          // sessionStorage may be disabled; /login/2fa handles the
           // missing-handoff case by redirecting back to /login.
         }
-        // Wipe any partially-set memory state from the 1FA leg.
-        accessTokenStore.wipe();
-        keyStore.wipe();
-        secretKey.fill(0);
+        // Plan 10: KEEP password + secret_key + email in the in-memory
+        // keyStore so /login/2fa can derive master_KEK to decrypt the
+        // wrapped TOTP secret (the 2FA-required login response carries
+        // no wrapped material — that comes from /2fa/step-up-material
+        // gated by the step-up token). Soft router.push (NOT
+        // window.location.assign) preserves the JS realm; the keyStore
+        // singleton survives the navigation.
+        keyStore.set("step_up_email", trimmedEmail);
+        keyStore.set("step_up_password", password);
+        keyStore.set("step_up_secret_key", secretKey);
+        // Don't wipe accessTokenStore — there's nothing in it yet on
+        // the 2FA-required branch (server didn't issue an access token).
         setPhase("ok");
-        window.location.assign("/login/2fa");
+        router.push("/login/2fa");
         return;
       }
 

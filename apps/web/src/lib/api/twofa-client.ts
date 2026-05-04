@@ -227,35 +227,56 @@ export async function verifyTotp(
   });
 }
 
-// --- TOTP credentials list (step-up token) -------------------------------
+// --- Step-up material (step-up token) ------------------------------------
 
 /**
- * Phase 03 Plan 10 NEW endpoint — `GET /2fa/totp/credentials`. Step-up
- * guarded; returns the wrapped TOTP secrets the client needs to decrypt +
- * verify locally. The endpoint exists ONLY to support the web step-up
- * flow (the user has already passed 1FA but doesn't yet have an access
- * token, so they can't hit `GET /2fa/methods`). Each row carries the
- * wrapped blob bytes; the client uses master_DEK from keyStore (loaded
- * during 1FA derivations) to decrypt.
+ * Phase 03 Plan 10 NEW endpoint — `GET /2fa/step-up-material`. Step-up
+ * guarded; returns everything `/login/2fa` needs to complete a TOTP
+ * ceremony client-side:
+ *   - `userArgonSalt + argon2Params + wrappedMasterDek` — the unwrap
+ *     material. The client derives `master_KEK` from the user's already-
+ *     typed password + secret_key (preserved in keyStore across the soft
+ *     `/login` → `/login/2fa` navigation) and unwraps `master_DEK`.
+ *   - `totpCredentials[]` — wrapped TOTP secrets. Client decrypts each
+ *     with master_DEK + the stored AAD bytes, runs RFC 6238 locally to
+ *     compute the candidate step, and posts to `/2fa/totp/verify`.
+ *
+ * WebAuthn-only step-up callers don't need this endpoint (the WebAuthn
+ * ceremony is server-verified). The web client only invokes it when the
+ * step-up response carried `twoFa.totpAvailable === true`.
+ *
+ * DEVIATION FROM PLAN: the plan called out a narrower
+ * `GET /2fa/totp/credentials`; this endpoint folds in the unwrap material
+ * to avoid a second roundtrip. Documented in 03-10-SUMMARY.
  */
-const TotpCredentialForStepUpSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(1),
-  /** Base64 of `nonce || ciphertext` — same packing as TotpFinishRegisterRequest. */
-  wrappedSecret: z.string().min(1),
-  /** Base64 of the AAD bytes used at wrap time. */
-  encryptedSecretAad: z.string().min(1),
+const StepUpMaterialResponseSchema = z.object({
+  userArgonSalt: z.string().min(1),
+  argon2Params: z.object({
+    memoryKiB: z.number().int().positive(),
+    iterations: z.number().int().positive(),
+    parallelism: z.literal(1),
+  }),
+  wrappedMasterDek: z.string().min(1),
+  totpCredentials: z.array(
+    z.object({
+      id: z.string().uuid(),
+      name: z.string().min(1),
+      /** Base64 of `nonce || ciphertext` — same packing as TotpFinishRegisterRequest. */
+      wrappedSecret: z.string().min(1),
+      /** Base64 of the AAD bytes used at wrap time. */
+      encryptedSecretAad: z.string().min(1),
+    }),
+  ),
 });
-export type TotpCredentialForStepUp = z.infer<
-  typeof TotpCredentialForStepUpSchema
->;
+export type StepUpMaterialResponse = z.infer<typeof StepUpMaterialResponseSchema>;
+export type TotpCredentialForStepUp = StepUpMaterialResponse["totpCredentials"][number];
 
-export async function listTotpCredentialsForStepUp(
+export async function getStepUpMaterial(
   stepUpToken: string,
-): Promise<TotpCredentialForStepUp[]> {
-  return request("/2fa/totp/credentials", {
+): Promise<StepUpMaterialResponse> {
+  return request("/2fa/step-up-material", {
     method: "GET",
-    schema: z.array(TotpCredentialForStepUpSchema),
+    schema: StepUpMaterialResponseSchema,
     accessToken: stepUpToken,
   });
 }
