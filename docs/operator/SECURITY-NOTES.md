@@ -150,6 +150,149 @@ Once the audit chain + metrics are live, watch Grafana for:
 - Sustained 5xx burst on auth endpoints → possible attack; check the rate
   limiter config and the source IPs.
 
+## Phase 03 — 2FA + sessions invariants (load-bearing)
+
+These invariants were established by Phase 03 (`.planning/phases/03-2fa-sessions/`)
+and the auditor at every subsequent gate will check them. Don't weaken
+without a fresh threat-model pass.
+
+### TOTP secret is browser-only
+
+The plaintext 20-byte TOTP secret NEVER reaches the API. The browser
+generates it (`sodium.randombytes_buf(20)` in
+`apps/web/src/app/(authed)/settings/security/enroll-totp-flow.tsx`),
+wraps it under `master_DEK` with AAD `encodeAad(argon2Params,
+"sv:user-totp:v1|" || SHA256(lower(email)))`, and POSTs the wrapped blob
+to `/2fa/totp/finish-register`. The server stores it as opaque bytes
+(`totp_credentials.wrapped_secret bytea`).
+
+**Server-side verification** (run before every Phase-03+ release):
+
+```bash
+grep -rE "master_dek|master_kek|masterDek|masterKek|computeTotpStep|verifyTotpCandidate" \
+  apps/api/src/twofa/totp/
+```
+
+Expected: zero hits except the load-bearing comment in `totp.service.ts`
+documenting the invariant. Any new hit → server has started decrypting
+or computing TOTP — STOP and fix.
+
+The same invariant applies to verification:
+`POST /2fa/totp/verify` accepts `{credentialId, candidateStep}` where
+`candidateStep` is the RFC 6238 step the client locally computed; the
+server CAS-locks `last_used_step < candidateStep` to prevent replay but
+performs no cryptographic verification of the secret. The security
+relies on the client decryption + comparison: an attacker without
+`master_DEK` cannot produce a `candidateStep` that matches the user's
+authenticator app.
+
+### AAD scheme extension
+
+Phase 02 established the AAD pattern:
+
+```
+AAD = encodeAad(argon2Params, label || SHA256(lower(email)))
+```
+
+with `label ∈ { "sv:user-master:v1|", "sv:user-recovery:v1|",
+"sv:user-sign-sk:v1|", "sv:user-kx-sk:v1|" }`.
+
+Phase 03 extends with `"sv:user-totp:v1|"` (Plan 03-10). Phase 04+
+labels follow the same `sv:<scope>:v1|` convention. Bumping `:v1` is a
+load-bearing event — every blob wrapped under the old version stays
+encrypted with the old AAD; you'd need a re-wrap migration to upgrade.
+
+### Session-epoch column + Redis cache + bust semantics
+
+Phase 03 Plan 04 added `users.session_epoch INT NOT NULL DEFAULT 0`.
+Every access JWT carries `epoch: <int>`; `JwtAuthGuard` 401s with
+`AUTH_SESSION_REVOKED` if the JWT's epoch differs from the user's
+current value. The current value is Redis-cached with TTL
+`SESSION_EPOCH_CACHE_TTL` (default 60s) under the key
+`session-epoch:<user-id>`.
+
+Bumps happen on:
+- `POST /sessions/revoke-all` (the user revokes everything from the
+  /settings/sessions page).
+- Operator manual intervention (see RUNBOOK.md "Lost 2FA" + "Session
+  revocation").
+
+**Critical invariant**: every bump MUST be paired with a Redis DEL of
+the cache key (`SessionService.bumpEpoch` does this; the runbook's SQL
+procedures explicitly DEL via `redis-cli`). Skipping the DEL means the
+worst-case revocation latency stretches to the full TTL.
+
+### WebAuthn RP ID is load-bearing
+
+`WEBAUTHN_RP_ID = pass.runadev.com` (apex) is bound into every passkey
+at registration. Changing it is a credential-bricking event — see
+RUNBOOK.md "WebAuthn RP-ID change" for the procedure. Decided in INDEX
+operator-decision §1; do not silently change.
+
+### `@Public()` route enumeration
+
+Phase 03 Plan 09 promoted `JwtAuthGuard` to a global APP_GUARD running
+BEFORE `SimpleVaultThrottlerGuard`. Routes that must be reachable
+without an access JWT carry `@Public()` from
+`apps/api/src/auth/jwt/public.decorator.ts`. The complete allow-list
+(every route NOT on this list MUST require an access JWT):
+
+- `GET /health`
+- `POST /invite/redeem`
+- `POST /auth/signup`
+- `GET /auth/params`
+- `POST /auth/login`
+- `POST /auth/refresh`
+- `POST /auth/logout`
+- `POST /2fa/webauthn/begin-auth` (step-up token via Require2FAStepUpGuard)
+- `POST /2fa/webauthn/finish-auth` (step-up token)
+- `POST /2fa/totp/verify` (step-up token)
+- `GET /2fa/step-up-material` (step-up token, Plan 03-10)
+
+Adding a new public route in any subsequent phase: justify in the plan
+SUMMARY + add to this list.
+
+### 2FA-required guard hand-off seam to Phase 07
+
+`apps/api/src/twofa/methods/methods.service.ts` exposes a mutable
+`sharedVaultDependencyCheck` field defaulted to a `() => false` stub.
+Phase 03's removal-guard surfaces a 409 `AUTH_2FA_REMOVAL_BLOCKED` when
+removing the last 2FA method AND the stub returns true. Phase 07 flips
+the stub to `(userId) => vault_members.exists(...)`. Until then the 409
+path is exercised only by integration tests via direct stub mutation.
+
+### Audit-action enum extensions (FROZEN for Phase 10)
+
+Phase 03 added the following actions to `AuditAction` (`apps/api/src/common/audit-events.ts`):
+
+- `auth.login.step_up_issued` (Plan 03-08)
+- `auth.2fa.webauthn.register.{ok,fail}` (Plan 03-02)
+- `auth.2fa.webauthn.auth.{ok,fail}` (Plan 03-02)
+- `auth.2fa.totp.register.{ok,fail}` (Plan 03-03)
+- `auth.2fa.totp.verify.{ok,fail}` (Plan 03-03)
+- `auth.2fa.method.removed` (Plan 03-06)
+- `auth.session.revoked` (Plan 03-05)
+- `auth.session.revoked_all` (Plan 03-05)
+
+The audit-event schema version stays at `v: 1`. Phase 10's hash-chain
+will index these — DO NOT rename or remove without bumping `v`.
+
+### Findings disposition (Phase 02 → Phase 03)
+
+Reference: `.planning/security/FINDINGS.md`.
+
+| Finding | Phase 03 disposition |
+|---|---|
+| FINDING-0017 (no email length cap) | **FIXED** by Plan 03-01 (`varchar(254)` on `users.email` + `invite_codes.email`; Zod `.max(254)` on every email DTO). |
+| FINDING-0021 (`/me` user-keyed throttler keyed by IP because of guard order) | **FIXED-PENDING-VERIFICATION** by Plan 03-09 (JwtAuthGuard moved to APP_GUARD before throttler). Live re-run owed to `/gsd:verify-work 3`. |
+| FINDING-0022 (`login-email` Redis-key flooding) | **FIXED-PENDING-VERIFICATION** by Plan 03-09 (key derivation switched to `sha256(email).slice(0,16)` — fixed-length, PII-free). Live re-run owed to `/gsd:verify-work 3`. |
+| FINDING-0011 (`/invite/redeem` echoes email) | DEFERRED to Phase 13 (Phase 03 doesn't touch invite flow; revisit when SMTP lands in Phase 07). |
+
+All other Phase-02 OPEN findings (0012..0029 minus the four above) remain
+OPEN as tracked tech debt for Phase 13's hardening pass.
+
+---
+
 ## CODEOWNERS
 
 `.github/CODEOWNERS` uses `@germankatz` as the sole owner. **Confirm this
