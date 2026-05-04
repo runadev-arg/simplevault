@@ -13,6 +13,7 @@ import { InviteModule } from "./invite/invite.module.js";
 import { MeModule } from "./me/me.module.js";
 import { RedisModule } from "./redis/redis.module.js";
 import { SessionsModule } from "./sessions/sessions.module.js";
+import { TestHelpersModule } from "./test-helpers/test-helpers.module.js";
 import { TwoFaModule } from "./twofa/twofa.module.js";
 import { VaultProbeModule } from "./vault/vault-probe.module.js";
 
@@ -153,7 +154,14 @@ const PINO_REDACT_PATHS = [
     // builds leave this unset → VaultProbeModule is not imported → the
     // `POST /vault/_2fa-guard-probe` route is absent from the router. Phase 07
     // deletes both this conditional spread and the module as its first commit.
-    ...(process.env.EXPOSE_TEST_ROUTES === "1" ? [VaultProbeModule] : []),
+    //
+    // Phase 03 Plan 12 — same gate exposes TestHelpersModule (Cypress
+    // test seams: flip-shared-vault-stub + mutate-webauthn-counter).
+    // Same production-safety story; the runbook documents grep + Dokploy
+    // panel checks the operator runs before deploy.
+    ...(process.env.EXPOSE_TEST_ROUTES === "1"
+      ? [VaultProbeModule, TestHelpersModule]
+      : []),
   ],
   // ORDER IS LOAD-BEARING. APP_GUARDs run in registration order; the next
   // one only fires if the previous allowed. Closing FINDING-0021 (Phase 03

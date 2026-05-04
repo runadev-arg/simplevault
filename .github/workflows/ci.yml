@@ -71,7 +71,7 @@ jobs:
     # Phase-02 end-to-end: invite -> /signup wizard -> /me -> logout ->
     # /login -> sad paths -> rate-limit smoke. The full happy path drives
     # libsodium + Argon2id (test floor params) in a real Chromium.
-    name: e2e (cypress · invite -> signup -> /me -> logout -> login -> sad)
+    name: e2e (cypress · phase 02 invite/signup/me/login/sad + phase 03 sessions + 2fa-removal)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: ci
@@ -128,6 +128,12 @@ jobs:
       CORS_ORIGINS: http://localhost:3000
       LOG_LEVEL: warn
       NEXT_PUBLIC_API_URL: http://localhost:3001
+      # Phase 03 Plan 12 — exposes the test-helpers controller (flip-
+      # shared-vault-stub, mutate-webauthn-counter, seed-totp-credential)
+      # used by 2fa-removal.cy.ts. RUNBOOK.md documents the production
+      # safety: this env var MUST stay unset on Dokploy. CI is the only
+      # context where setting it is correct.
+      EXPOSE_TEST_ROUTES: "1"
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
