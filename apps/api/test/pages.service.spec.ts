@@ -204,8 +204,10 @@ class FakeDb {
   }
 
   private handleSelectHistory(params: unknown[]): ExecResult<PageVersionRow> {
-    // Param order: [pageId, ownerUserId]
-    const [pageId, ownerUserId] = params as [string, string];
+    // Service emits: SELECT ... WHERE pv.page_id = $id AND EXISTS (... p.id = $id AND owner = $user)
+    // → params: [pageId, pageId, ownerUserId]. Take first + last.
+    const pageId = params[0] as string;
+    const ownerUserId = params[params.length - 1] as string;
     const page = this.pages.get(pageId);
     if (!page) return { rows: [], rowCount: 0 };
     const v = this.vaults.get(page.vault_id);
@@ -222,7 +224,7 @@ class FakeDb {
     //   - getById / post-failure ownership probe: [pageId, ownerUserId]
     //   - list (no q): [ownerUserId]
     //   - list with q (prefix): [prefixLow, prefixHigh, ownerUserId]
-    if (norm.includes("title_search_token")) {
+    if (norm.includes("title_search_token >=") || norm.includes("title_search_token<=") || norm.includes("title_search_token <")) {
       const [low, high, ownerUserId] = params as [Uint8Array, Uint8Array, string];
       const rows = [...this.pages.values()].filter((p) => {
         const v = this.vaults.get(p.vault_id);
@@ -248,16 +250,17 @@ class FakeDb {
   }
 
   private async handleUpdatePage(params: unknown[]): Promise<ExecResult<PageRow>> {
-    // Param order: [ciphertext, nonce, aadParamsJson, titleSearchToken, pageId, casVersion, ownerUserId]
-    const [ciphertext, nonce, aadParamsJson, titleSearchToken, pageId, casVersion, ownerUserId] = params as [
+    // Param order: [ciphertext, nonce, aadParamsJson, titleSearchToken, pageId, casVersion]
+    // (ownership is enforced by the prior SELECT FOR UPDATE in the same tx).
+    const [ciphertext, nonce, aadParamsJson, titleSearchToken, pageId, casVersion] = params as [
       Uint8Array,
       Uint8Array,
       string,
       Uint8Array,
       string,
       number,
-      string,
     ];
+    const ownerUserId: string | undefined = undefined;
 
     const prev = this.rowLocks.get(pageId) ?? Promise.resolve();
     let release!: () => void;
@@ -268,8 +271,10 @@ class FakeDb {
       await new Promise<void>((r) => { setTimeout(r, 0); });
       const row = this.pages.get(pageId);
       if (!row) return { rows: [], rowCount: 0 };
-      const v = this.vaults.get(row.vault_id);
-      if (!v || v.owner_user_id !== ownerUserId) return { rows: [], rowCount: 0 };
+      if (ownerUserId !== undefined) {
+        const v = this.vaults.get(row.vault_id);
+        if (!v || v.owner_user_id !== ownerUserId) return { rows: [], rowCount: 0 };
+      }
       if (row.version !== casVersion) return { rows: [], rowCount: 0 };
       const updated: PageRow = {
         ...row,

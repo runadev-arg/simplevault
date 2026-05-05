@@ -138,6 +138,34 @@ export const RateLimits = {
     limit: intEnv(process.env.VAULT_LIST_RATE_LIMIT, 120),
     ttl: 60_000,
   },
+  // Phase 05 Plan 02 — pages CRUD + title-prefix search ceilings. All
+  // user-keyed via `req.user.id` (post-FINDING-0021 closure: APP_GUARD
+  // ordering in app.module populates req.user before this guard runs).
+  // Names are referenced by the PagesController `@Throttle({...})` decorators.
+  // Rationale:
+  // - `pages-write-user` 60/min: shared by POST + PATCH + DELETE (matches
+  //   credentials-write-user posture; bursts of writes are cheap-ish but a
+  //   misbehaving client shouldn't hammer the CAS+rotation transaction).
+  // - `pages-read-user` 300/min: GET /pages/:id + /pages/:id/history. Reads
+  //   are PK / index lookups; cap matches credentials-read-user.
+  // - `pages-search-user` 120/min: GET /pages?q=<hex>. Bytea range scans
+  //   are index-friendly; the looser ceiling accommodates type-as-you-search
+  //   UX without opening an obvious DoS vector at v1 scale.
+  pagesWriteUser: {
+    name: "pages-write-user",
+    limit: intEnv(process.env.PAGES_WRITE_RATE_LIMIT, 60),
+    ttl: 60_000,
+  },
+  pagesReadUser: {
+    name: "pages-read-user",
+    limit: intEnv(process.env.PAGES_READ_RATE_LIMIT, 300),
+    ttl: 60_000,
+  },
+  pagesSearchUser: {
+    name: "pages-search-user",
+    limit: intEnv(process.env.PAGES_SEARCH_RATE_LIMIT, 120),
+    ttl: 60_000,
+  },
 } as const;
 
 /**
@@ -187,7 +215,11 @@ export class SimpleVaultThrottlerGuard extends ThrottlerGuard {
       // Phase 04 Plan 03 — credentials + vault-list ceilings (all user-keyed).
       name === "credentials-write-user" ||
       name === "credentials-read-user" ||
-      name === "vault-list-user";
+      name === "vault-list-user" ||
+      // Phase 05 Plan 02 — pages CRUD + search ceilings (all user-keyed).
+      name === "pages-write-user" ||
+      name === "pages-read-user" ||
+      name === "pages-search-user";
     if (userKeyed && typeof req.user?.id === "string") {
       tracker = `user:${req.user.id}`;
     } else if (name === "login-email") {

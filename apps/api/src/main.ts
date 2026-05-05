@@ -8,6 +8,7 @@ import { Logger } from "nestjs-pino";
 import { AppModule } from "./app.module.js";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter.js";
 import { CREDENTIAL_BODY_MAX_BYTES } from "./credentials/credentials.constants.js";
+import { PAGE_BODY_MAX_BYTES } from "./pages/pages.constants.js";
 
 async function bootstrap(): Promise<void> {
   // Phase 04 Plan 03 — disable Nest's auto-mounted body parsers so we can
@@ -26,6 +27,9 @@ async function bootstrap(): Promise<void> {
   // Mount BEFORE the global parser so Express prefix-matches credentials
   // routes against this stricter limit first.
   app.use("/credentials", express.json({ limit: CREDENTIAL_BODY_MAX_BYTES }));
+  // Phase 05 Plan 02 — route-scoped JSON body parser for `/pages/*` (256 KiB
+  // default, env-tunable up to 1 MiB ceiling; see pages/pages.constants.ts).
+  app.use("/pages", express.json({ limit: PAGE_BODY_MAX_BYTES }));
   // Default JSON + URL-encoded parsers for every other route — preserves
   // existing behaviour from when `{bodyParser: true}` was the default.
   app.use(express.json());

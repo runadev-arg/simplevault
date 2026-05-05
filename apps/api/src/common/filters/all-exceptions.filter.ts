@@ -41,12 +41,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (isPayloadTooLargeError(exception)) {
       const url = typeof req.url === "string" ? req.url : "";
       const onCredentials = url.startsWith("/credentials");
+      const onPages = url.startsWith("/pages");
       res.setHeader("X-Request-Id", requestId);
+      let mappedCode: ErrorCode = ErrorCodes.VALIDATION_FAILED;
+      let mappedMsg = "Request body too large";
+      if (onCredentials) {
+        mappedCode = ErrorCodes.CREDENTIAL_BODY_TOO_LARGE;
+        mappedMsg = "Credential body exceeds 64 KiB";
+      } else if (onPages) {
+        mappedCode = ErrorCodes.PAGE_BODY_TOO_LARGE;
+        mappedMsg = "Page body exceeds size limit";
+      }
       res.status(HttpStatus.PAYLOAD_TOO_LARGE).json({
-        error: {
-          code: onCredentials ? ErrorCodes.CREDENTIAL_BODY_TOO_LARGE : ErrorCodes.VALIDATION_FAILED,
-          message: onCredentials ? "Credential body exceeds 64 KiB" : "Request body too large",
-        },
+        error: { code: mappedCode, message: mappedMsg },
       });
       return;
     }
