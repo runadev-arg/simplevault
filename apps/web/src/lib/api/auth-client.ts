@@ -176,7 +176,7 @@ export class AuthClientResponseError extends Error {
 export async function request<T>(
   path: string,
   opts: {
-    method: "GET" | "POST" | "DELETE";
+    method: "GET" | "POST" | "PATCH" | "DELETE";
     body?: unknown;
     schema: z.ZodSchema<T>;
     accessToken?: string | null;
