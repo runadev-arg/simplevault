@@ -17,6 +17,10 @@ export * from "./totp.js";
 // Browser-only — Phase 04 vault-credential AAD builder. Server NEVER
 // imports this; do NOT add to ./node.ts. Enforced by `test/parity.test.ts`.
 export * from "./vault-credential.js";
+// Browser-only — Phase 05 vault-page AAD builder + title-search helpers
+// (stubs in Plan 05-01; full impl + parity tests in Plan 05-03). Server
+// NEVER imports this; do NOT add to ./node.ts. Enforced by parity.test.ts.
+export * from "./vault-page.js";
 
 const notImplemented = (name: string): never => {
   throw new Error(`@simplevault/crypto browser.${name}() not yet implemented (Phase 02)`);

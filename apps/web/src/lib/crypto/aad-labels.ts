@@ -38,6 +38,36 @@ export const AAD_LABEL_TOTP = "sv:user-totp:v1|" as const;
  * new label.
  */
 export const AAD_LABEL_VAULT_CREDENTIAL = "sv:vault-credential:v1|" as const;
+/**
+ * Phase 05 — vault page blob AAD label. FROZEN.
+ *
+ * Per-page AAD =
+ *   utf8(AAD_LABEL_VAULT_PAGE)
+ *   || sha256(lower(email))
+ *   || canonicalJson({ pageId, vaultId, version })
+ *
+ * Plan 05-03 builds the AAD via `buildVaultPageAad` which imports THIS
+ * constant — never re-declares the literal (sibling parity with
+ * AAD_LABEL_VAULT_CREDENTIAL; closes FINDING-0026 for pages by
+ * construction). Bumping the v-suffix is a data-migration event:
+ * every existing page blob fails AEAD-unwrap until re-wrapped.
+ */
+export const AAD_LABEL_VAULT_PAGE = "sv:vault-page:v1|" as const;
+/**
+ * Phase 05 — HKDF-Expand info string for the per-vault title-search key.
+ *
+ * `titleSearchKey = HKDF-Expand-SHA256(masterDek, info=TITLE_SEARCH_HKDF_INFO,
+ *                                      L=32)`
+ *
+ * `titleSearchToken = HMAC-SHA256(titleSearchKey, normalize(title)).slice(0,8)`
+ *
+ * FROZEN: the info string is baked into every persisted titleSearchToken on
+ * disk. Bumping the v-suffix invalidates every existing token (tokens become
+ * unsearchable until re-derived + re-written — a data-migration event).
+ * Lives next to AAD_LABEL_VAULT_PAGE because both are FROZEN constants
+ * consumed by the same Plan 05-03 helpers in `@simplevault/crypto`.
+ */
+export const TITLE_SEARCH_HKDF_INFO = "sv:title-search:v1" as const;
 
 export type AadLabel =
   | typeof AAD_LABEL_MASTER
@@ -45,4 +75,5 @@ export type AadLabel =
   | typeof AAD_LABEL_SIGN_SK
   | typeof AAD_LABEL_KX_SK
   | typeof AAD_LABEL_TOTP
-  | typeof AAD_LABEL_VAULT_CREDENTIAL;
+  | typeof AAD_LABEL_VAULT_CREDENTIAL
+  | typeof AAD_LABEL_VAULT_PAGE;
