@@ -1,15 +1,35 @@
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
+import express from "express";
 import helmet from "helmet";
 import { Logger } from "nestjs-pino";
 
 import { AppModule } from "./app.module.js";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter.js";
+import { CREDENTIAL_BODY_MAX_BYTES } from "./credentials/credentials.constants.js";
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
+  // Phase 04 Plan 03 — disable Nest's auto-mounted body parsers so we can
+  // mount a route-scoped 64 KiB JSON cap for `/credentials/*` BEFORE the
+  // default JSON parser. Express body-parser fires 413 above the cap; the
+  // global filter maps `PayloadTooLargeError` → `CREDENTIAL_BODY_TOO_LARGE`.
+  // FINDING-0015 partial closure: every other route keeps the Express
+  // default (~100 KiB) — Phase 13 lands the global default cap.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+    bodyParser: false,
+  });
   app.useLogger(app.get(Logger));
+
+  // Route-scoped JSON body parser for `/credentials/*` (64 KiB cap).
+  // Mount BEFORE the global parser so Express prefix-matches credentials
+  // routes against this stricter limit first.
+  app.use("/credentials", express.json({ limit: CREDENTIAL_BODY_MAX_BYTES }));
+  // Default JSON + URL-encoded parsers for every other route — preserves
+  // existing behaviour from when `{bodyParser: true}` was the default.
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
 
   // Trust 1 proxy hop (Dokploy/Traefik). Adjust if multi-hop.
   app.set("trust proxy", 1);

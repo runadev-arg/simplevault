@@ -2,6 +2,22 @@ import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, HttpSta
 import { type ErrorCode, ErrorCodes } from "@simplevault/shared/errors";
 import type { Request, Response } from "express";
 
+/**
+ * Express body-parser raises `PayloadTooLargeError` (subclass of Error with
+ * `type === "entity.too.large"` and `status === 413`) BEFORE Nest pipes/
+ * guards run. Detect it via duck-typing rather than instanceof to avoid
+ * importing body-parser internals (the constructor is not exported in a
+ * stable way across versions).
+ */
+function isPayloadTooLargeError(exception: unknown): boolean {
+  if (typeof exception !== "object" || exception === null) return false;
+  const e = exception as { type?: unknown; status?: unknown; statusCode?: unknown; name?: unknown };
+  if (e.type === "entity.too.large") return true;
+  if (e.status === 413 || e.statusCode === 413) return true;
+  if (e.name === "PayloadTooLargeError") return true;
+  return false;
+}
+
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
@@ -18,6 +34,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let status: number = HttpStatus.INTERNAL_SERVER_ERROR;
     let code: ErrorCode = ErrorCodes.SERVER_INTERNAL;
     let message = "Internal server error";
+
+    // Phase 04 Plan 03 — body-parser 413 lands here BEFORE any Nest pipe.
+    // Map to the stable `CREDENTIAL_BODY_TOO_LARGE` code so the web client
+    // can render a deterministic error message.
+    if (isPayloadTooLargeError(exception)) {
+      const url = typeof req.url === "string" ? req.url : "";
+      const onCredentials = url.startsWith("/credentials");
+      res.setHeader("X-Request-Id", requestId);
+      res.status(HttpStatus.PAYLOAD_TOO_LARGE).json({
+        error: {
+          code: onCredentials ? ErrorCodes.CREDENTIAL_BODY_TOO_LARGE : ErrorCodes.VALIDATION_FAILED,
+          message: onCredentials ? "Credential body exceeds 64 KiB" : "Request body too large",
+        },
+      });
+      return;
+    }
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
