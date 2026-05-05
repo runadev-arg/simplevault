@@ -1,7 +1,11 @@
 import {
   buildVaultCredentialAad as buildVaultCredentialAadImpl,
+  encrypt as aeadEncrypt,
+  decrypt as aeadDecrypt,
+  ready,
   type VaultCredentialAadInput,
 } from "@simplevault/crypto/browser";
+import sodium from "libsodium-wrappers-sumo";
 
 import { AAD_LABEL_VAULT_CREDENTIAL } from "./aad-labels";
 
@@ -12,13 +16,14 @@ import { AAD_LABEL_VAULT_CREDENTIAL } from "./aad-labels";
  * The AAD is built by `buildVaultCredentialAad` from `@simplevault/crypto`
  * with the label INJECTED from `aad-labels.ts` (single source of truth;
  * FINDING-0026 closure relies on this). The nonce is 24 random bytes per
- * encrypt (REQ-CRYPTO no-reuse — XChaCha20-Poly1305 IETF).
+ * encrypt (REQ-CRYPTO no-reuse — XChaCha20-Poly1305 IETF, generated
+ * inside `aead.encrypt`).
  */
 
-export type CredentialBlob = {
+export interface CredentialBlob {
   ciphertext: Uint8Array;
   nonce: Uint8Array;
-};
+}
 
 /**
  * Convenience: build the per-credential AAD using the FROZEN label
@@ -32,18 +37,36 @@ export function buildVaultCredentialAad(
   return buildVaultCredentialAadImpl(input, AAD_LABEL_VAULT_CREDENTIAL);
 }
 
-export function encryptCredential(
-  _plaintextJson: string,
-  _masterDek: Uint8Array,
-  _aad: Uint8Array,
+/**
+ * Encrypt a credential plaintext (canonical JSON) under master_DEK with
+ * the supplied AAD. The 24-byte nonce is generated inside `aead.encrypt`
+ * (libsodium randombytes_buf), guaranteeing no reuse.
+ */
+export async function encryptCredential(
+  plaintextJson: string,
+  masterDek: Uint8Array,
+  aad: Uint8Array,
 ): Promise<CredentialBlob> {
-  throw new Error("not impl");
+  await ready();
+  const pt = sodium.from_string(plaintextJson);
+  const blob = await aeadEncrypt(pt, masterDek, aad);
+  return { ciphertext: blob.ciphertext, nonce: blob.nonce };
 }
 
-export function decryptCredential(
-  _blob: CredentialBlob,
-  _masterDek: Uint8Array,
-  _aad: Uint8Array,
+/**
+ * Decrypt a credential blob. Throws on tag mismatch (mutated ciphertext,
+ * wrong AAD, wrong key, mutated nonce). Returns the original UTF-8 JSON.
+ */
+export async function decryptCredential(
+  blob: CredentialBlob,
+  masterDek: Uint8Array,
+  aad: Uint8Array,
 ): Promise<string> {
-  throw new Error("not impl");
+  await ready();
+  const pt = await aeadDecrypt(
+    { ciphertext: blob.ciphertext, nonce: blob.nonce },
+    masterDek,
+    aad,
+  );
+  return sodium.to_string(pt);
 }
