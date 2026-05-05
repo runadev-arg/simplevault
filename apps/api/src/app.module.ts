@@ -6,6 +6,7 @@ import { LoggerModule } from "nestjs-pino";
 import { AuthModule } from "./auth/auth.module.js";
 import { JwtAuthGuard } from "./auth/jwt/jwt-auth.guard.js";
 import { SimpleVaultThrottlerGuard, ThrottlerConfigModule } from "./common/throttler.config.js";
+import { CredentialsModule } from "./credentials/credentials.module.js";
 import { CryptoModule } from "./crypto/crypto.module.js";
 import { DbModule } from "./db/db.module.js";
 import { HealthModule } from "./health/health.module.js";
@@ -154,6 +155,11 @@ const PINO_REDACT_PATHS = [
     // `/credentials/*` CRUD on the same vaultId; the web client fans out one
     // `GET /credentials/:id` per visible card (Plan 04-09 lazy-load).
     VaultModule,
+    // Phase 04 Plan 02 — `/credentials/*` CRUD with atomic CAS PATCH +
+    // uniform-404 anti-enum. Personal-vault routes only (no Require2FAGuard
+    // — REQ-2FA-003 / Key Link 3); shared-vault routes will live elsewhere
+    // in Phase 07.
+    CredentialsModule,
     // Phase 03 Plan 12 — `EXPOSE_TEST_ROUTES === "1"` exposes TestHelpersModule
     // (Cypress test seams: flip-shared-vault-stub + mutate-webauthn-counter).
     // Production builds leave the env var unset, so the conditional spread

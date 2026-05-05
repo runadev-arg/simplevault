@@ -57,6 +57,17 @@ export const AuditAction = {
   // is the sessionId (revoked) or userId (revoke_all).
   SessionRevoked: "auth.session.revoked",
   SessionRevokeAll: "auth.session.revoke_all",
+  // Phase 04 Plan 02 — credentials CRUD audit emits. The four actions are
+  // added here (widen now); Plan 04-11 finalises the redact list + any
+  // extra `data.*` field-name conventions. `targetId` is the credentialId
+  // for all four; `data.vaultId` + `data.version` carry the post-mutation
+  // version (1 on create, version+1 on update, the deleted row's last
+  // version on delete — best-effort only on delete since the row is gone).
+  // No plaintext, no ciphertext, no AAD bytes — `data` stays opaque.
+  CredentialCreate: "credential.create",
+  CredentialView: "credential.view",
+  CredentialUpdate: "credential.update",
+  CredentialDelete: "credential.delete",
 } as const;
 
 export type AuditActionValue = (typeof AuditAction)[keyof typeof AuditAction];

@@ -33,7 +33,7 @@ import { DbService } from "../db/db.service.js";
 export interface CreateCredentialDto {
   vaultId: string;
   /** Optional client-supplied uuid (Plan 04-10 cross-dep — keeps AAD self-consistent on POST). */
-  credentialId?: string;
+  credentialId?: string | undefined;
   ciphertext: Uint8Array;
   nonce: Uint8Array;
   aadParamsJson: string;
