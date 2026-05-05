@@ -5,4 +5,15 @@ import nextConfig from "@simplevault/eslint-config/next";
 // unit specs (`src/**/*.test.ts`, e.g. AAD label byte-assertions added
 // in Plan 04-01) are likewise outside the typed-lint project — they run
 // under their own vitest config and don't need Next-build-time linting.
-export default [...nextConfig, { ignores: ["cypress/**", "src/**/*.test.ts", "vitest.config.ts"] }];
+export default [
+  ...nextConfig,
+  {
+    ignores: [
+      "cypress/**",
+      "src/**/*.test.ts",
+      "src/**/*.test.tsx",
+      "vitest.config.ts",
+      "scripts/**",
+    ],
+  },
+];
