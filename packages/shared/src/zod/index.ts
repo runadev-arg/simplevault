@@ -209,3 +209,148 @@ export const MeResponseSchema = z
   })
   .strict();
 export type MeResponse = z.infer<typeof MeResponseSchema>;
+
+/**
+ * Phase 05 Plan 01 — vault-page request/response schemas.
+ *
+ * Sibling parity with `apps/api/src/credentials/credentials.dto.ts`. Lives
+ * in `@simplevault/shared` (not in apps/api) because Phase 05 has the web
+ * client construct + validate the same shapes for optimistic round-trips.
+ * Bytea handling: bodies arrive as JSON with base64-encoded `ciphertext`,
+ * `nonce`, `titleSearchToken`; the transform decodes into `Uint8Array`
+ * after validating post-decode length.
+ *
+ * `.strict()` (Truth 18 system-wide) rejects unknown keys outright — a
+ * forward-compat client adding a new field surfaces as a 400 instead of a
+ * silent strip.
+ *
+ * AEAD field caps:
+ *   - PAGE_CIPHERTEXT_MAX_BYTES = 256 KiB (defence-in-depth above the
+ *     body-parser cap; final cap finalised in Plan 05-04 service).
+ *   - PAGE_AAD_PARAMS_JSON_MAX_BYTES = 2048 (per plan).
+ *   - Nonce = 24 bytes (XChaCha20).
+ *   - Title-search token = 8 bytes (HMAC-SHA256 truncated).
+ */
+const PAGE_NONCE_BYTES = 24;
+const PAGE_TITLE_SEARCH_TOKEN_BYTES = 8;
+export const PAGE_CIPHERTEXT_MAX_BYTES = 256 * 1024;
+export const PAGE_AAD_PARAMS_JSON_MAX_BYTES = 2048;
+
+const pageBase64ToBytesBounded = (
+  min: number,
+  max: number,
+  label: string,
+): z.ZodType<Uint8Array, z.ZodTypeDef, unknown> =>
+  z
+    .string()
+    .min(1)
+    .transform((v, ctx) => {
+      const buf = Buffer.from(v, "base64");
+      if (buf.length < min || buf.length > max) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${label}: expected ${min.toString()}..${max.toString()} bytes after base64 decode, got ${buf.length.toString()}`,
+        });
+        return z.NEVER;
+      }
+      return new Uint8Array(buf);
+    });
+
+/**
+ * `POST /pages` request body.
+ *
+ * `version` is `literal(1)` because every newly-created page begins life
+ * at version 1. Cross-dep with Plan 05-04: the client supplies the page id
+ * as part of `aadParamsJson` (canonical-JSON `{pageId, vaultId, version}`)
+ * so the AEAD it just encrypted is self-consistent on POST.
+ */
+export const PageCreateSchema = z
+  .object({
+    vaultId: z.string().uuid(),
+    ciphertext: pageBase64ToBytesBounded(
+      1,
+      PAGE_CIPHERTEXT_MAX_BYTES,
+      "ciphertext",
+    ),
+    nonce: pageBase64ToBytesBounded(
+      PAGE_NONCE_BYTES,
+      PAGE_NONCE_BYTES,
+      "nonce",
+    ),
+    aadParamsJson: z.string().min(1).max(PAGE_AAD_PARAMS_JSON_MAX_BYTES),
+    titleSearchToken: pageBase64ToBytesBounded(
+      PAGE_TITLE_SEARCH_TOKEN_BYTES,
+      PAGE_TITLE_SEARCH_TOKEN_BYTES,
+      "titleSearchToken",
+    ),
+    version: z.literal(1),
+  })
+  .strict();
+export type PageCreateDto = z.infer<typeof PageCreateSchema>;
+
+/**
+ * `PATCH /pages/:id` request body. `version` is the CAS-witness (caller's
+ * known-current value, NOT the new value). Server CAS bumps the row to
+ * `version + 1`. Stale witness → 409 `PAGE_VERSION_CONFLICT`.
+ */
+export const PageUpdateSchema = z
+  .object({
+    ciphertext: pageBase64ToBytesBounded(
+      1,
+      PAGE_CIPHERTEXT_MAX_BYTES,
+      "ciphertext",
+    ),
+    nonce: pageBase64ToBytesBounded(
+      PAGE_NONCE_BYTES,
+      PAGE_NONCE_BYTES,
+      "nonce",
+    ),
+    aadParamsJson: z.string().min(1).max(PAGE_AAD_PARAMS_JSON_MAX_BYTES),
+    titleSearchToken: pageBase64ToBytesBounded(
+      PAGE_TITLE_SEARCH_TOKEN_BYTES,
+      PAGE_TITLE_SEARCH_TOKEN_BYTES,
+      "titleSearchToken",
+    ),
+    version: z.number().int().min(1),
+  })
+  .strict();
+export type PageUpdateDto = z.infer<typeof PageUpdateSchema>;
+
+/**
+ * `GET /pages/:id` response. Server `.parse(...)` against this schema is
+ * the defence-in-depth check against ORM hydration leaks (Truth 9 sibling).
+ * The bytea fields are emitted as base64 strings on the wire.
+ */
+export const PageResponseSchema = z
+  .object({
+    id: z.string().uuid(),
+    vaultId: z.string().uuid(),
+    version: z.number().int().min(1),
+    ciphertext: z.string().min(1),
+    nonce: z.string().min(1),
+    aadParamsJson: z.string().min(1).max(PAGE_AAD_PARAMS_JSON_MAX_BYTES),
+    titleSearchToken: z.string().min(1),
+    isLocked: z.boolean(),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+export type PageResponse = z.infer<typeof PageResponseSchema>;
+
+/**
+ * `GET /pages/:id/history` response — last 10 ciphertext snapshots,
+ * newest first (ordered by `(pageId, version DESC)` index). Plan 05-04
+ * trims to 10 in the PATCH transaction.
+ */
+export const PageHistoryItemSchema = z
+  .object({
+    version: z.number().int().min(1),
+    ciphertext: z.string().min(1),
+    nonce: z.string().min(1),
+    aadParamsJson: z.string().min(1).max(PAGE_AAD_PARAMS_JSON_MAX_BYTES),
+    createdAt: z.string().datetime(),
+  })
+  .strict();
+export type PageHistoryItem = z.infer<typeof PageHistoryItemSchema>;
+
+export const PageHistoryResponseSchema = z.array(PageHistoryItemSchema);
+export type PageHistoryResponse = z.infer<typeof PageHistoryResponseSchema>;

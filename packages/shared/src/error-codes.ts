@@ -47,6 +47,15 @@ export const ErrorCodes = {
   // is taken by VAULT_QUOTA_EXCEEDED from a prior phase; next-free E2xxx
   // (Rule-2 adaptation, same as the sibling 04-02 allocation note above).
   CREDENTIAL_BODY_TOO_LARGE: "E2008",
+  // Phase 05 Plan 01..05 — vault-page CRUD + atomic CAS PATCH (Wave 1
+  // schema; Wave 2 service). Sibling parity with the credentials triplet
+  // above (E2006/E2007/E2008). PAGE_NOT_FOUND is the uniform-404 anti-
+  // enumeration surface; PAGE_VERSION_CONFLICT is the CAS witness 409;
+  // PAGE_BODY_TOO_LARGE is the body-parser 413 mapping. Allocated next-
+  // free in E2xxx range (Rule-2 adaptation, same pattern as E2006..E2008).
+  PAGE_NOT_FOUND: "E2009",
+  PAGE_VERSION_CONFLICT: "E2010",
+  PAGE_BODY_TOO_LARGE: "E2011",
 
   // Crypto (E3xxx)
   CRYPTO_DECRYPT_FAILED: "E3001",
