@@ -1,5 +1,30 @@
 # SimpleVault — Roadmap
 
+> ## ⚠️ MVP RE-SCOPE — 2026-05-05
+>
+> Operator decision: ship a usable MVP fast, harden after. The original 14-phase roadmap below is preserved verbatim for traceability but **the active execution path is now the abbreviated MVP track in this section.** Defer phases retain their plans + findings tracking; nothing is lost, just postponed.
+>
+> **MVP scope (KEEP):**
+> - Phase 04 — Personal vault: credentials ✅ functional (lint cleanup landed; Waves 5+6 audit-events extension + Cypress E2E + 4-auditor gate **deferred**)
+> - **Phase 05 — TipTap pages** (rich-text notes; full per-spec)
+> - **Phase 07 + 08 collapsed → "Phase 7" — Shared vaults: create/invite + members/revoke** (sharing is core operator ask; sealed-box wrap stays)
+>
+> **Defer to post-MVP (decision: orchestrator, can revisit):**
+> - Phase 06 (page double-lock) — optional extra layer
+> - Phase 09 (unanimous delete + override) — manual delete acceptable for MVP
+> - Phase 10 (audit hash-chain) — basic audit-events already emit
+> - Phase 11 (export) — BIP-39 recovery already exists from Phase 02; export-flow deferred
+> - Phase 12 (web hardening) — CSP/headers already in place since Phase 01
+> - Phase 13 (security hardening) — replaced by single consolidated audit pass before deploy
+>
+> **MVP-Phase-Z (replaces Phases 13 + 14):** one consolidated 4-auditor pass over the cumulative deltas (04+05+07/08), fix any Critical/High that turn up, then Dokploy deploy.
+>
+> **Process changes:** ~6 plans/phase (was 12), one wide wave per phase where possible, TDD only for crypto/auth-critical code, no per-phase auditor gate (single end-of-MVP gate), shorter SUMMARY/INDEX docs.
+>
+> Original full roadmap follows as historical reference + tracking for forwarded findings.
+>
+> ---
+>
 > **Mode:** YOLO · **Depth:** Comprehensive · **Parallelization:** enabled · **v1 ship target:** when all 12 auditors sign off and pentester-redteam fails to break in.
 >
 > Each phase has a **security gate**: relevant auditor agents (per `.planning/security/AGENTS.md`) must produce a PASS verdict in `AUDIT-LOG.md` with no Critical/High findings open in `FINDINGS.md`. Goal-backward: a phase is "done" when the goal is verifiably TRUE, not when tasks are checked off.

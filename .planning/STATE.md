@@ -7,8 +7,23 @@
 ## Current position
 
 **Stage:** IMPLEMENTATION — **Phase 01 CLOSED 2026-04-29**. **Phase 02 CLOSED 2026-05-02**. **Phase 03 CLOSED 2026-05-04** — all 12/12 plans done + security gate **PASSED** after FINDING-0031 closure re-run. Goal-backward verification 20/20 truths verified (`.planning/phases/03-2fa-sessions/03-VERIFICATION.md`). Four blocking auditors signed off (auth-flow PASS post-closure, crypto PASS-WITH-CONCERNS, owasp-top10 PASS-WITH-CONCERNS, access-control PASS); `threat-modeler` appended `THREAT-MODEL.md` §17.1 (Phase-03 transitions: AT-5 leaf A RESIDUAL → MITIGATED-WITHIN-EPOCH-LATENCY; leaf F RESIDUAL → MITIGATED-FOR-WEBAUTHN-USERS / RESIDUAL-FOR-TOTP-ONLY-USERS; phishing-without-WebAuthn HIGH → MITIGATED-FOR-WEBAUTHN-USERS; new leaf H "TOTP secret extraction from compromised browser" RESIDUAL) + §19 (Phase-03 STRIDE per data flow, 8 entries). FINDING-0031 (HIGH — `revokeOne` did not bump `users.session_epoch`, contradicting Truth 12) FIXED + VERIFIED-CLOSED same gate cycle: `apps/api/src/auth/sessions/session.service.ts:419` now invokes `bumpEpoch(userId)` after the family-revoke UPDATE (load-bearing UPDATE-then-bump order matches `revokeAllForUser`); anti-enumeration preserved (`null` returns occur before any epoch-bump). FINDING-0034 (Info, JSDoc drift on `bumpEpoch` after the fix) closed in same cycle. Tracked tech-debt forwarded to Phase 13: FINDING-0032 (TOTP `/verify` IP-only throttler — add user-keyed ceiling), FINDING-0033 (step-up guard doesn't validate epoch claim), FINDING-0040 (TOTP unwrap should recompute AAD client-side instead of trusting server), FINDING-0050 (webauthn finish-auth status drift 400-vs-401), FINDING-0051 (`ParseUUIDPipe` 400-vs-404 cross-user enumeration), FINDING-0052 (boot-time guard for `EXPOSE_TEST_ROUTES=1 && NODE_ENV=production`), FINDING-0053 (counter-regression doesn't `logger.warn`), FINDING-0054 (pino redact list lacks new field names). Operator checkpoints still pending (NON-blocking for security gate, but recommended before Phase 04 lands UI work that consumes the same surfaces): Plan 10 T4 visual UX review of `/settings/security` + Plan 12 T4 review of new `docs/operator/RUNBOOK.md`. **Phase 02 CLOSED 2026-05-02** — all 12/12 plans done + security gate **PASSED** after FINDING-0010 closure re-run. Goal-backward verification 12/12 truths verified (`.planning/phases/02-auth-crypto/02-VERIFICATION.md`). Five blocking auditors signed off (PASS / PASS-WITH-CONCERNS, no Critical/High open); `threat-modeler` updated `THREAT-MODEL.md` §14–§18 (Phase 02 STRIDE + AT-5). FINDINGS-0011..0029 tracked OPEN as Medium/Low (none block). Tracked tech debt forwarded to Phase 03/13: FINDING-0021 (APP_GUARD ordering disables `/me` user-keyed throttling — falls back to IP) and FINDING-0022 (throttler reads unbounded `req.body.email` pre-Zod) are the most architecturally interesting. See `.planning/phases/02-auth-crypto/02-PHASE-SUMMARY.md` for the cumulative recap and Phase-03+ hand-offs.
-**Active phase:** 04 — Personal vault: credentials (PLANNING — `/gsd:plan-phase 4` next).
-**Active milestone:** M1 (Personal vault)
+**Active phase:** 04 closing → 05 TipTap pages next (MVP track).
+**Active milestone:** MVP-track (re-scoped 2026-05-05 — see ROADMAP.md §"MVP RE-SCOPE")
+
+## MVP track (2026-05-05)
+
+Operator re-scoped from full 14-phase roadmap to a 3-phase MVP: keep Phase 04 (credentials, done modulo lint), Phase 05 (TipTap pages), Phase 07+08 collapsed (shared vaults). Defer everything else (page double-lock, unanimous delete, audit hash-chain, export, web hardening, full hardening pass) to post-MVP. Single consolidated 4-auditor pass before Dokploy deploy replaces Phases 13+14.
+
+**Phase 04 status (truncated):** Waves 1–4 complete (24 commits across 10 plans); lint cleanup landed at `6ca4af1`. Waves 5 (audit-events extension + Pino redact) + 6 (Cypress E2E + RUNBOOK update) **DEFERRED to post-MVP**; per-phase 4-auditor gate **DEFERRED to MVP-Phase-Z**. Functional code green: `pnpm --filter @simplevault/web build` passes lint + typecheck; 52 web tests + 46 api tests pass; `/vault`, `/credential/new`, `/credential/[id]` all render and ship 539 kB First Load JS. Findings 0026 closed by construction; 0015 partial folded; 0021/0022/0029/0030/0032..0054 carried as MVP tech-debt.
+
+**Process changes for remaining MVP work:**
+- ~6 plans per phase (was 12)
+- One wide wave per phase where possible
+- TDD only for crypto/auth-critical paths
+- No per-phase auditor gate; single end-of-MVP gate (MVP-Phase-Z)
+- Shorter SUMMARY/INDEX docs
+
+
 **Last commit on planning:** see `git log .planning/`
 
 ## Phase status
