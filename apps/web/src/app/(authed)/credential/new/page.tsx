@@ -4,7 +4,7 @@
  * Phase 04 / Plan 04-10 (T2) — /credential/new.
  *
  * Create flow:
- *   1. fetch /vault/personal → vaultId
+ *   1. fetch /vault/personal → vaultId (or use ?vaultId= query param for shared vaults)
  *   2. fetch /me → email (sha256(email) is bound into AAD)
  *   3. client generates a UUIDv4 LOCALLY (crypto.randomUUID) — see
  *      Plan 04-10 SUMMARY: "client-chosen UUID closes the AAD-self-
@@ -13,19 +13,23 @@
  *   4. encrypt(JSON, master_DEK, AAD = label || sha256(email) ||
  *      canonicalJson({credentialId, vaultId, version: 1}))
  *   5. POST → server stores ciphertext + nonce + the canonical aadParamsJson
- *   6. router.replace("/vault")
+ *   6. router.replace("/vault") or router.replace("/vaults/:vaultId")
  *
  * Master DEK + email + access token come from the in-memory stores
  * (keyStore + accessTokenStore). The /vault list page (Plan 04-09 sibling)
  * is the natural post-create destination.
+ *
+ * Phase 07 — supports shared vaults via ?vaultId= query param.
+ * resolveVaultDek() picks the shared vault DEK when available, falls back
+ * to master_dek for personal vaults.
  */
 
 import {
   canonicalCredentialAadJson,
   ready,
 } from "@simplevault/crypto/browser";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import type { JSX } from "react";
 
 import { CredentialEditor } from "../../../../components/credential-editor";
@@ -35,7 +39,6 @@ import {
   listVaultPersonal,
 } from "../../../../lib/api/credentials-client";
 import { useAuth } from "../../../../lib/auth/auth-context";
-import { keyStore } from "../../../../lib/auth/key-store";
 import {
   buildVaultCredentialAad,
   encryptCredential,
@@ -44,9 +47,12 @@ import {
   DecryptedCredentialSchema,
   type DecryptedCredential,
 } from "../../../../lib/vault/credential-shape";
+import { resolveVaultDek } from "../../../../lib/vault/resolve-vault-dek";
 
-export default function NewCredentialPage(): JSX.Element {
+function NewCredentialPageInner(): JSX.Element {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const vaultIdParam = searchParams.get("vaultId") ?? undefined;
   const { accessToken } = useAuth();
   const [bootError, setBootError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -60,13 +66,21 @@ export default function NewCredentialPage(): JSX.Element {
     void (async () => {
       try {
         await ready();
-        const [vault, who] = await Promise.all([
-          listVaultPersonal(accessToken),
-          apiMe(accessToken),
-        ]);
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (cancelled) return;
-        setCtx({ vaultId: vault.vaultId, email: who.email });
+        if (vaultIdParam !== undefined) {
+          // Shared vault — skip listVaultPersonal, use the provided vaultId
+          const who = await apiMe(accessToken);
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+          if (cancelled) return;
+          setCtx({ vaultId: vaultIdParam, email: who.email });
+        } else {
+          const [vault, who] = await Promise.all([
+            listVaultPersonal(accessToken),
+            apiMe(accessToken),
+          ]);
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+          if (cancelled) return;
+          setCtx({ vaultId: vault.vaultId, email: who.email });
+        }
       } catch (e) {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (cancelled) return;
@@ -78,7 +92,7 @@ export default function NewCredentialPage(): JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [accessToken]);
+  }, [accessToken, vaultIdParam]);
 
   const onSave = async (raw: DecryptedCredential): Promise<void> => {
     if (accessToken === null || ctx === null) {
@@ -86,7 +100,7 @@ export default function NewCredentialPage(): JSX.Element {
       return;
     }
     setSaveError(null);
-    const masterDek = keyStore.getBytes("master_dek");
+    const masterDek = resolveVaultDek(ctx?.vaultId);
     if (masterDek === undefined) {
       setSaveError("Vault is locked. Sign in again.");
       return;
@@ -119,7 +133,11 @@ export default function NewCredentialPage(): JSX.Element {
       nonce: blob.nonce,
       aadParamsJson,
     });
-    router.replace("/vault");
+    if (vaultIdParam !== undefined) {
+      router.replace("/vaults/" + vaultIdParam);
+    } else {
+      router.replace("/vault");
+    }
   };
 
   if (bootError) {
@@ -147,9 +165,22 @@ export default function NewCredentialPage(): JSX.Element {
       mode="new"
       onSave={onSave}
       onCancel={() => {
-        router.replace("/vault");
+        if (vaultIdParam !== undefined) {
+          router.replace("/vaults/" + vaultIdParam);
+        } else {
+          router.replace("/vault");
+        }
       }}
       error={saveError}
     />
+  );
+}
+
+export default function NewCredentialPage(): JSX.Element {
+  // Suspense boundary required by Next.js App Router for `useSearchParams`.
+  return (
+    <Suspense fallback={<main className="mx-auto max-w-2xl px-6 py-10"><p className="text-zinc-400">Loading…</p></main>}>
+      <NewCredentialPageInner />
+    </Suspense>
   );
 }

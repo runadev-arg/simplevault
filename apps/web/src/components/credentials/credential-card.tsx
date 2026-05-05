@@ -65,6 +65,8 @@ export interface CredentialCardProps {
   accessToken: string;
   reuseMap: Map<string, string[]>;
   onDecrypted: (view: CredentialSummaryView) => void;
+  /** Phase 07 — shared vault DEK. When provided, used instead of master_dek. */
+  dek?: Uint8Array;
 }
 
 export function CredentialCard({
@@ -74,6 +76,7 @@ export function CredentialCard({
   accessToken,
   reuseMap,
   onDecrypted,
+  dek,
 }: CredentialCardProps): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<CredentialSummaryView | null>(null);
@@ -99,7 +102,7 @@ export function CredentialCard({
     async function doDecrypt(): Promise<void> {
       try {
         await ready();
-        const masterDek = keyStore.getBytes("master_dek");
+        const masterDek = dek ?? keyStore.getBytes("master_dek");
         if (masterDek === undefined) {
           throw new Error("Vault locked — master_DEK missing from keyStore");
         }
@@ -136,7 +139,7 @@ export function CredentialCard({
         setError(e instanceof Error ? e.message : "Decrypt failed");
       }
     }
-  }, [summary.id, vaultId, email, accessToken, onDecrypted]);
+  }, [summary.id, vaultId, email, accessToken, onDecrypted, dek]);
 
   const reuseCount =
     view !== null ? reuseCountForCred(reuseMap, view.id, view.pwHash) : 0;

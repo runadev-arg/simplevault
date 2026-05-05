@@ -4,7 +4,8 @@
  * Phase 04 / Plan 04-10 (T3) — /credential/[id].
  *
  * Edit flow:
- *   1. fetch /vault/personal → vaultId; fetch /credentials/:id → blob+version
+ *   1. fetch /vault/personal → vaultId (or use ?vaultId= query param for shared vaults);
+ *      fetch /credentials/:id → blob+version
  *   2. fetch /me → email (sha256(email) bound into AAD)
  *   3. decrypt with AAD = label || sha256(email) || canonicalJson(
  *      {credentialId,vaultId,version: blob.version})
@@ -24,6 +25,10 @@
  *
  * Old plaintext NEVER exits the encrypted blob — the server only ever sees
  * ciphertext. Cap = 10; oldest evicted.
+ *
+ * Phase 07 — supports shared vaults via ?vaultId= query param.
+ * resolveVaultDek() picks the shared vault DEK when available, falls back
+ * to master_dek for personal vaults.
  */
 
 import {
@@ -31,8 +36,8 @@ import {
   canonicalCredentialAadJson,
   ready,
 } from "@simplevault/crypto/browser";
-import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import type { JSX } from "react";
 
 import { CredentialEditor } from "../../../../components/credential-editor";
@@ -45,7 +50,6 @@ import {
 } from "../../../../lib/api/credentials-client";
 import { VersionConflictError } from "../../../../lib/api/errors";
 import { useAuth } from "../../../../lib/auth/auth-context";
-import { keyStore } from "../../../../lib/auth/key-store";
 import { AAD_LABEL_VAULT_CREDENTIAL } from "../../../../lib/crypto/aad-labels";
 import {
   decryptCredential,
@@ -55,6 +59,7 @@ import {
   DecryptedCredentialSchema,
   type DecryptedCredential,
 } from "../../../../lib/vault/credential-shape";
+import { resolveVaultDek } from "../../../../lib/vault/resolve-vault-dek";
 
 interface Baseline {
   vaultId: string;
@@ -75,10 +80,12 @@ function buildAad(
   );
 }
 
-export default function EditCredentialPage(): JSX.Element {
+function EditCredentialPageInner(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const searchParams = useSearchParams();
+  const vaultIdParam = searchParams.get("vaultId") ?? undefined;
   const { accessToken } = useAuth();
   const [baseline, setBaseline] = useState<Baseline | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
@@ -90,30 +97,53 @@ export default function EditCredentialPage(): JSX.Element {
     void (async (): Promise<void> => {
       try {
         await ready();
-        const masterDek = keyStore.getBytes("master_dek");
+        const masterDek = resolveVaultDek(vaultIdParam);
         if (masterDek === undefined) {
           throw new Error("Vault is locked. Sign in again.");
         }
-        const [vault, who, blob] = await Promise.all([
-          listVaultPersonal(accessToken),
-          apiMe(accessToken),
-          getCredential(accessToken, id),
-        ]);
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (cancelled) return;
-        const aad = buildAad(vault.vaultId, id, blob.version, who.email);
-        const json = await decryptCredential(
-          { ciphertext: blob.ciphertext, nonce: blob.nonce },
-          masterDek,
-          aad,
-        );
-        const decrypted = DecryptedCredentialSchema.parse(JSON.parse(json));
-        setBaseline({
-          vaultId: vault.vaultId,
-          email: who.email,
-          version: blob.version,
-          decrypted,
-        });
+        if (vaultIdParam !== undefined) {
+          // Shared vault — skip listVaultPersonal, use the provided vaultId
+          const [who, blob] = await Promise.all([
+            apiMe(accessToken),
+            getCredential(accessToken, id),
+          ]);
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+          if (cancelled) return;
+          const aad = buildAad(vaultIdParam, id, blob.version, who.email);
+          const json = await decryptCredential(
+            { ciphertext: blob.ciphertext, nonce: blob.nonce },
+            masterDek,
+            aad,
+          );
+          const decrypted = DecryptedCredentialSchema.parse(JSON.parse(json));
+          setBaseline({
+            vaultId: vaultIdParam,
+            email: who.email,
+            version: blob.version,
+            decrypted,
+          });
+        } else {
+          const [vault, who, blob] = await Promise.all([
+            listVaultPersonal(accessToken),
+            apiMe(accessToken),
+            getCredential(accessToken, id),
+          ]);
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+          if (cancelled) return;
+          const aad = buildAad(vault.vaultId, id, blob.version, who.email);
+          const json = await decryptCredential(
+            { ciphertext: blob.ciphertext, nonce: blob.nonce },
+            masterDek,
+            aad,
+          );
+          const decrypted = DecryptedCredentialSchema.parse(JSON.parse(json));
+          setBaseline({
+            vaultId: vault.vaultId,
+            email: who.email,
+            version: blob.version,
+            decrypted,
+          });
+        }
       } catch (e) {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (cancelled) return;
@@ -131,14 +161,14 @@ export default function EditCredentialPage(): JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, id]);
+  }, [accessToken, id, vaultIdParam]);
 
   const saveWithBaseline = async (
     base: Baseline,
     next: DecryptedCredential,
   ): Promise<void> => {
     if (accessToken === null) return;
-    const masterDek = keyStore.getBytes("master_dek");
+    const masterDek = resolveVaultDek(vaultIdParam);
     if (masterDek === undefined) {
       setSaveError("Vault is locked. Sign in again.");
       return;
@@ -183,7 +213,11 @@ export default function EditCredentialPage(): JSX.Element {
         version: newVersion,
         decrypted: validated,
       });
-      router.replace("/vault");
+      if (vaultIdParam !== undefined) {
+        router.replace("/vaults/" + vaultIdParam);
+      } else {
+        router.replace("/vault");
+      }
     } catch (err) {
       if (err instanceof VersionConflictError) {
         // Re-fetch + decrypt the FRESH server state.
@@ -234,7 +268,11 @@ export default function EditCredentialPage(): JSX.Element {
     );
     if (!ok) return;
     await deleteCredential(accessToken, id);
-    router.replace("/vault");
+    if (vaultIdParam !== undefined) {
+      router.replace("/vaults/" + vaultIdParam);
+    } else {
+      router.replace("/vault");
+    }
   };
 
   if (bootError) {
@@ -264,9 +302,22 @@ export default function EditCredentialPage(): JSX.Element {
       onSave={onSave}
       onDelete={onDelete}
       onCancel={() => {
-        router.replace("/vault");
+        if (vaultIdParam !== undefined) {
+          router.replace("/vaults/" + vaultIdParam);
+        } else {
+          router.replace("/vault");
+        }
       }}
       error={saveError}
     />
+  );
+}
+
+export default function EditCredentialPage(): JSX.Element {
+  // Suspense boundary required by Next.js App Router for `useSearchParams`.
+  return (
+    <Suspense fallback={<main className="mx-auto max-w-2xl px-6 py-10"><p className="text-zinc-400">Loading…</p></main>}>
+      <EditCredentialPageInner />
+    </Suspense>
   );
 }

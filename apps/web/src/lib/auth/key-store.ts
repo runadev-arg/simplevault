@@ -49,6 +49,18 @@ export function has(key: string): boolean {
   return _store.has(key);
 }
 
+/**
+ * Zero-overwrite the Uint8Array at `key` (if any), then remove it from the
+ * Map.  Strings cannot be reliably zeroed in JS — same caveat as `wipe()`.
+ */
+export function del(key: string): void {
+  const bytes = getBytes(key);
+  if (bytes !== undefined) {
+    bytes.fill(0);
+  }
+  _store.delete(key);
+}
+
 export function entries(): IterableIterator<[string, StoredValue]> {
   return _store.entries();
 }
@@ -66,4 +78,4 @@ export function wipe(): void {
   _store.clear();
 }
 
-export const keyStore = { set, get, getBytes, getString, has, entries, wipe };
+export const keyStore = { set, get, getBytes, getString, has, entries, wipe, delete: del };
