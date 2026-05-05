@@ -105,3 +105,91 @@ Lockfile clean, workspace-protocol use consistent, no typosquats, hygiene solid 
 **Report:** `.planning/security/audit-reports/2026-04-29-dependency-supply-chain-auditor-phase01-rerun.md`.
 **Tech-debt tracked:** Two `pnpm.overrides` (multer + lodash) to remove during Phase 02 NestJS 11 upgrade. Dev-deps Highs (glob/picomatch via @nestjs/cli) acceptable for Phase 01; remediated by Phase 02.
 **Next review:** Recurring weekly via Dependabot + cron-driven `pnpm audit` in CI; also re-run on next phase gate.
+
+---
+
+## 2026-05-04 — gsd-verifier — Phase 03 (initial)
+
+**Scope:** 20 goal-backward truths from `03-INDEX.md`. Three-level structural verification (exists / substantive / wired) on every artifact, requirements coverage check, anti-pattern scan.
+**Method:** grep + file checks + reading SUMMARY.md as evidence corroboration (not as ground truth).
+**Findings:** 20/20 truths structurally verified; 4-auditor security gate explicitly deferred to dedicated runs; two operator checkpoints (Plan 10 T4 UX + Plan 12 T4 runbook) flagged for human verification.
+**Verdict:** human_needed (structural complete; awaiting auditor + operator gates).
+**Report:** `.planning/phases/03-2fa-sessions/03-VERIFICATION.md`
+**Next review:** after auditor gate closure.
+
+---
+
+## 2026-05-04 — auth-flow-auditor — Phase 03
+
+**Scope:** 2FA enrol leak (Truth 8), TOTP replay guard, WebAuthn counter regression, step-up token containment, removal-while-shared-vault, session-epoch revocation latency.
+**Method:** Static read-only audit of `apps/api/src/twofa/`, `apps/api/src/auth/jwt/`, `apps/api/src/auth/login/`, `apps/api/src/sessions/`, plus web step-up flow.
+**Findings:** Critical 0 / High 1 (FINDING-0031 — `revokeOne` did not bump `session_epoch`, contradicted Truth 12; **VERIFIED-CLOSED same gate cycle** by adding `bumpEpoch(userId)` after family-revoke + JSDoc fix tracked as FINDING-0034 also VERIFIED-CLOSED) / Medium 1 (FINDING-0032 `/2fa/totp/verify` IP-only throttler, OPEN deferrable) / Low 1 (FINDING-0033 step-up guard doesn't validate epoch claim, OPEN).
+**Verdict:** **PASS** (post-closure; was PASS-WITH-CONCERNS pre-closure).
+**Findings filed:** FINDING-0031 (HIGH, closed), FINDING-0032 (MED), FINDING-0033 (LOW), FINDING-0034 (INFO, closed).
+**Report:** `.planning/security/audit-reports/2026-05-04-auth-flow-auditor-phase03.md` (with re-run section appended for 0031 closure).
+**Cross-auditor concern:** access-control-auditor's PASS treated the missing bump as deliberate based on inline doc; auth-flow-auditor treated INDEX Truth 12 as ground truth. Resolution: INDEX is authoritative; code now matches INDEX.
+**Next review:** after FINDING-0032 closure (defer-or-fix decision pending operator).
+
+---
+
+## 2026-05-04 — crypto-auditor — Phase 03
+
+**Scope:** TOTP browser-only invariant (server grep clean), AAD label `"sv:user-totp:v1|"` + per-user binder `SHA256(lower(email))`, WebAuthn challenge entropy + atomic consume, `@simplewebauthn/server` v11 explicit RP-ID/origin, counter regression, step-up JWT signing key.
+**Method:** Static read-only audit of `packages/crypto/src/totp.ts` + `apps/api/src/twofa/{webauthn,totp}/`, server-side `grep -rn "master_DEK|master_kek|computeTotpStep|verifyTotpCandidate"` under `apps/api/src/`.
+**Findings:** Critical 0 / High 0 / Medium 0 / Low 1 (FINDING-0040 — client trusts server-supplied `encryptedSecretAad` instead of recomputing locally) / Info 2 (FINDING-0041 pino-redact `master_kek` grep noise; FINDING-0042 unset `engines` in `apps/api/package.json`).
+**Verdict:** **PASS-WITH-CONCERNS** (matches Phase 02's bar).
+**Findings filed:** FINDING-0040 (LOW), FINDING-0041 (INFO), FINDING-0042 (INFO). All OPEN, none blocking.
+**Report:** `.planning/security/audit-reports/2026-05-04-crypto-auditor-phase03.md`.
+**Server-side grep:** 6 hits, all classified as doc-strings or pino-redaction wildcards; no implementation references → invariant HOLDS.
+**Next review:** Phase 04 / 07 vault-wrap audits.
+
+---
+
+## 2026-05-04 — owasp-top10-auditor — Phase 03
+
+**Scope:** Systematic OWASP Top 10 (2021) pass with Phase-03 focus on A01 (access control), A02 (cryptographic failures — TOTP secret never reaches server), A07 (auth failures — uniform 401 on 2FA fail paths).
+**Method:** Static read-only audit of `apps/api/src/twofa/`, `apps/api/src/sessions/`, `apps/api/src/auth/`, `apps/api/src/common/throttler.config.ts`, `apps/web/src/app/(authed)/settings/` and `apps/web/src/app/login/2fa/`.
+**Findings:** Critical 0 / High 0 / Medium 0 / Low 1 (FINDING-0052 boot-time guard for `EXPOSE_TEST_ROUTES=1 && NODE_ENV=production`) / Info 4 (FINDING-0050 webauthn finish-auth status drift; FINDING-0051 `ParseUUIDPipe` 400-vs-404 on cross-user IDs; FINDING-0053 counter-regression doesn't logger.warn; FINDING-0054 pino redact list lacks new field names).
+**Verdict:** **PASS-WITH-CONCERNS** (no Critical/High; all 5 informational).
+**Findings filed:** FINDING-0050..0054.
+**Report:** `.planning/security/audit-reports/2026-05-04-owasp-top10-auditor-phase03.md`.
+**Per-category:** A01 PASS (every route scoped to `req.user.id` / `req.stepUp.sub`; cross-user → 404). A02 PASS (server grep clean of TOTP plaintext / RFC 6238 logic). A07 PASS (uniform 401 on TOTP verify, step-up purpose discriminator dual-guarded). A03/A04/A05/A08/A09 PASS. A06/A10 N/A.
+**Next review:** Phase 04 OWASP delta.
+
+---
+
+## 2026-05-04 — access-control-auditor — Phase 03
+
+**Scope:** First gate run. Owner-only listing/revoke (Truth 11/13), 404-not-403 anti-enumeration on `DELETE /sessions/:id` and `DELETE /2fa/methods/:id`, per-user (not per-session) session-epoch.
+**Method:** Static read-only audit per-route (10 Phase-03 endpoints) of guard chain, owner-scope filters (`WHERE user_id = req.user.id`), cross-user behaviour, step-up token containment.
+**Findings:** Critical 0 / High 0 / Medium 0 / Low 0 / Info 0.
+**Verdict:** **PASS.**
+**Findings filed:** none.
+**Report:** `.planning/security/audit-reports/2026-05-04-access-control-auditor-phase03.md`.
+**Note:** Initial PASS treated the missing `bumpEpoch` on `revokeOne` as deliberate based on inline JSDoc — this was overridden by auth-flow-auditor (FINDING-0031, INDEX as authoritative). Code now bumps the epoch; access-control posture unchanged (all routes still 404 anti-enumeration on cross-user).
+**Next review:** Phase 04/07 sharing/wrapping; Phase 13 hardening.
+
+---
+
+## 2026-05-04 — threat-modeler — Phase 03
+
+**Scope:** Update `THREAT-MODEL.md` for Phase 03 close — §17 transitions for AT-5 leaves A and F + phishing-without-WebAuthn, new leaf H (TOTP secret extraction from compromised browser), §19 STRIDE per Phase-03 data flow.
+**Method:** Append-only edits to THREAT-MODEL.md preserving §1–§18 verbatim.
+**Verdict:** Informational — does not block.
+**Findings filed:** none (informational role).
+**Report:** `.planning/security/audit-reports/2026-05-04-threat-modeler-phase03.md`.
+**Key transitions:** AT-5 leaf A RESIDUAL → MITIGATED-WITHIN-EPOCH-LATENCY; AT-5 leaf F RESIDUAL → MITIGATED-FOR-WEBAUTHN-USERS / RESIDUAL-FOR-TOTP-ONLY-USERS; phishing-without-WebAuthn HIGH → MITIGATED-FOR-WEBAUTHN-USERS. New leaf H (TOTP-secret extraction) RESIDUAL.
+**Next review:** Milestone M1 baseline (start of Phase 04).
+
+---
+
+## 2026-05-04 — Phase 03 GATE OUTCOME
+
+**Verdict:** **PASS.**
+- 4 blocking auditors all PASS / PASS-WITH-CONCERNS post-closure.
+- Threat-modeler informational pass committed to THREAT-MODEL.md §17 + §19.
+- 0 Critical / 0 High OPEN. Mediums (1) + Lows (3) + Info (8) tracked OPEN; none block per AGENTS.md gate rule.
+- Goal-backward verification 20/20 truths verified.
+- gsd-verifier flagged two operator checkpoints (Plan 10 T4 UX + Plan 12 T4 runbook) which remain owner-side.
+**Operator checkpoints still pending (NON-blocking):** Plan 10 T4 visual UX review of `/settings/security`; Plan 12 T4 review of new `docs/operator/RUNBOOK.md`.
+**Tracked tech-debt to Phase 13:** FINDING-0032 (TOTP verify user-keyed throttler), FINDING-0033 (step-up guard epoch check), FINDING-0040 (TOTP unwrap AAD recompute), FINDING-0050..0054.

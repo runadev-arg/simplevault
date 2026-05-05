@@ -417,6 +417,152 @@ All findings reported by security auditor agents (manual or automated). Tracked 
 - **Status:** OPEN
 - **Blocks-phase:** NO
 
+### FINDING-0031 — `DELETE /sessions/:id` did not bump `users.session_epoch`, contradicting Truth 12
+
+- **Severity:** High
+- **Reporter:** auth-flow-auditor
+- **Date opened:** 2026-05-04
+- **Phase:** 03
+- **Affected:** `apps/api/src/auth/sessions/session.service.ts` `revokeOne` (lines 385-412 prior to fix)
+- **Description:** `revokeOne` family-revoked the targeted session row but did NOT call `bumpEpoch(userId)`. Truth 12 of `03-INDEX.md` mandates: *"Bumps the targeted user's session_epoch, cutting all access tokens for that user within ≤ next-request latency."* An inline doc-comment claimed single-session-revoke was "intentionally softer" than revoke-all, but that softer behaviour leaves a stolen access token alive for up to `ACCESS_TOKEN_TTL` (default 900 s) after the user explicitly revokes the compromised session — defeating REQ-AUTH-004 and AT-5 leaf A's threat-model transition (MITIGATED-WITHIN-EPOCH-LATENCY).
+- **Recommendation:** After the family-revoke UPDATE returns `revokedCount > 0`, call `await this.bumpEpoch(userId)` (mirroring `revokeAllForUser`'s load-bearing UPDATE-then-bump order). Cross-user / not-found / already-revoked paths must continue to return `null` BEFORE any epoch-bump, to preserve the anti-enumeration property. Update the doc-comment.
+- **Status:** VERIFIED-CLOSED (2026-05-04)
+- **Blocks-phase:** NO (closed)
+- **Fix:** `revokeOne` now invokes `bumpEpoch(userId)` after a successful family-revoke (`apps/api/src/auth/sessions/session.service.ts:419`); doc-comment rewritten to explain per-user grain (lines 372-395); ordering is load-bearing (UPDATE refresh rows BEFORE bumpEpoch) and matches `revokeAllForUser`. Anti-enumeration preserved — `null` returns on cross-user / not-found / already-revoked occur BEFORE any epoch-bump. API build green; 32/32 api unit tests pass. Re-verified by auth-flow-auditor 2026-05-04 (re-run section appended to `2026-05-04-auth-flow-auditor-phase03.md`).
+
+### FINDING-0032 — `/2fa/totp/verify` throttler is IP-keyed despite step-up token carrying `sub`
+
+- **Severity:** Medium
+- **Reporter:** auth-flow-auditor
+- **Date opened:** 2026-05-04
+- **Phase:** 03
+- **Affected:** `apps/api/src/common/throttler.config.ts` (`twoFaVerifyIp` ceiling), `apps/api/src/twofa/totp/totp.controller.ts` `/verify`
+- **Description:** `/2fa/totp/verify` carries a step-up token whose `sub` identifies the user pre-2FA, but the throttler ceiling is keyed by IP. An attacker who controls a botnet (or rotates IPs via a residential proxy) can brute-force a 6-digit TOTP code (10⁶ space, ±1 step drift = 3×10⁶ effective) at 30/min/IP without ever tripping a per-user limit. Cross-references FINDING-0021/0022's user-keying intent.
+- **Recommendation:** Add a `twoFaVerifyUser` ceiling (e.g. 10/min keyed off `req.stepUp.sub`) alongside the existing IP-keyed ceiling, and document the dual-key strategy in `throttler.config.ts`. Defer if explicit operator decision is to keep step-up brute-force pressure entirely IP-shaped.
+- **Status:** OPEN
+- **Blocks-phase:** NO
+
+### FINDING-0033 — `Require2FAStepUpGuard` does not validate `epoch` claim against `users.session_epoch`
+
+- **Severity:** Low
+- **Reporter:** auth-flow-auditor
+- **Date opened:** 2026-05-04
+- **Phase:** 03
+- **Affected:** `apps/api/src/auth/jwt/step-up-jwt.service.ts` (verify path), `Require2FAStepUpGuard`
+- **Description:** Step-up JWTs carry an `epoch` claim mirrored from the user's `session_epoch` at issuance, but the step-up verify path does not re-check that claim against the current `users.session_epoch`. A user who triggers `revoke-all` between 1FA pass and 2FA completion would have their access tokens invalidated but their step-up token would still be honoured for the remaining TTL (≤120 s). Low because the step-up token has a tiny TTL and only mints `/2fa/*` flows, but the claim is already on the wire — checking it costs one cache-hit and closes the consistency gap.
+- **Recommendation:** Add `epoch === currentEpoch(sub)` to `StepUpJwtService.verify` using the same `SessionEpochCache.get(userId)` primitive `JwtAuthGuard` uses.
+- **Status:** OPEN
+- **Blocks-phase:** NO
+
+### FINDING-0040 — Client trusts server-supplied `encryptedSecretAad` at TOTP unwrap
+
+- **Severity:** Low
+- **Reporter:** crypto-auditor
+- **Date opened:** 2026-05-04
+- **Phase:** 03
+- **Affected:** `apps/web/src/lib/api/twofa-client.ts` (TOTP unwrap path), `apps/api/src/twofa/step-up/step-up-material.controller.ts`
+- **Description:** The TOTP unwrap flow accepts `encryptedSecretAad` from the server response and passes it directly to AEAD decryption rather than re-deriving it locally from `"sv:user-totp:v1|" + sha256(lower(email))`. AEAD failure on AAD mismatch is the right *security* outcome, but trusting server-supplied AAD lets a malicious server probe whether a different AAD scheme would unwrap (a defence-in-depth concern; mirrors Phase 02 FINDING-0026 drift-risk).
+- **Recommendation:** Recompute AAD client-side from `email` (already in the user profile) at unwrap time; ignore `encryptedSecretAad` from the server response, OR assert it equals the locally-recomputed value before invoking AEAD.
+- **Status:** OPEN
+- **Blocks-phase:** NO
+
+### FINDING-0041 — `master_kek` appears in pino redaction list (expected grep noise)
+
+- **Severity:** Info
+- **Reporter:** crypto-auditor
+- **Date opened:** 2026-05-04
+- **Phase:** 03
+- **Affected:** `apps/api/src/app.module.ts:91` (pino redaction wildcards)
+- **Description:** Server-side grep for `master_kek` finds a pino redaction wildcard (`*.master_kek`). This is the correct defence-in-depth posture (redact even though the field should never appear in any structured log), and is expected noise for the "browser-only secret" gate. Documented here so future grepers don't flag it as a regression.
+- **Recommendation:** None — informational.
+- **Status:** OPEN
+- **Blocks-phase:** NO
+
+### FINDING-0042 — WebAuthn challenge entropy via WebCrypto in @simplewebauthn v11 — pin Node ≥20
+
+- **Severity:** Info
+- **Reporter:** crypto-auditor
+- **Date opened:** 2026-05-04
+- **Phase:** 03
+- **Affected:** `apps/api/package.json` engines field (currently unset), `@simplewebauthn/server@11.0.0`
+- **Description:** `@simplewebauthn/server@11` allocates challenges via `WebCrypto.getRandomValues` (CSPRNG-equivalent to `crypto.randomBytes`). WebCrypto is globally available on Node ≥20; on earlier engines the import path differs. SimpleVault's CI Dockerfile pins `node:20-alpine` so this is fine today, but the `engines` field in `apps/api/package.json` is unset — a future contributor running `pnpm dev` on an older Node would silently get worse behaviour.
+- **Recommendation:** Add `"engines": { "node": ">=20" }` to `apps/api/package.json`.
+- **Status:** OPEN
+- **Blocks-phase:** NO
+
+### FINDING-0050 — WebAuthn finish-auth status drift: 400 vs 401 on adjacent fail paths
+
+- **Severity:** Info
+- **Reporter:** owasp-top10-auditor
+- **Date opened:** 2026-05-04
+- **Phase:** 03
+- **Affected:** `apps/api/src/twofa/webauthn/webauthn-auth.service.ts` (`CHALLENGE_INVALID` 400 vs `VERIFICATION_FAILED` 401)
+- **Description:** Two adjacent fail modes of `/2fa/webauthn/finish-auth` return different HTTP statuses (400 challenge-invalid, 401 verification-failed). An attacker probing with mismatched challenge IDs can distinguish "your challenge expired" from "your assertion didn't verify" — a small enumeration oracle on whether a particular user has rotated through a recent challenge.
+- **Recommendation:** Collapse to a single 401 `WEBAUTHN_VERIFICATION_FAILED` for any non-success path on the assertion side, mirroring `/2fa/totp/verify`'s uniform 401 stance.
+- **Status:** OPEN
+- **Blocks-phase:** NO
+
+### FINDING-0051 — `ParseUUIDPipe` 400 vs 404 distinguishes malformed from cross-user IDs
+
+- **Severity:** Info
+- **Reporter:** owasp-top10-auditor
+- **Date opened:** 2026-05-04
+- **Phase:** 03
+- **Affected:** `apps/api/src/sessions/sessions.controller.ts`, `apps/api/src/twofa/methods/methods.controller.ts` (DELETE routes)
+- **Description:** `DELETE /sessions/:id` and `DELETE /2fa/methods/:id` are decorated with `ParseUUIDPipe` which returns 400 for non-UUID path params, while cross-user-but-valid-UUID lookups return 404. An attacker crafting non-UUID probes can distinguish "malformed input" from "valid input but not yours". Tiny information leak; documented for completeness.
+- **Recommendation:** Consider returning 404 for both paths (custom pipe that throws `NotFoundException` on parse error), OR document the leak as accepted (it's a generic Nest pattern across the codebase).
+- **Status:** OPEN
+- **Blocks-phase:** NO
+
+### FINDING-0052 — No startup warn when `EXPOSE_TEST_ROUTES=1 && NODE_ENV=production`
+
+- **Severity:** Low
+- **Reporter:** owasp-top10-auditor
+- **Date opened:** 2026-05-04
+- **Phase:** 03
+- **Affected:** `apps/api/src/app.module.ts:162-164`, `apps/api/src/main.ts`
+- **Description:** The `EXPOSE_TEST_ROUTES=1` flag conditionally registers the `/vault/_2fa-guard-probe` and test-helpers routes. The flag is correctly absent from production Dockerfile, but no runtime guard warns/exits if an operator accidentally sets it on a prod build — the only safety check is the runbook's grep advisory.
+- **Recommendation:** Add a boot-time assertion: `if (process.env.EXPOSE_TEST_ROUTES === "1" && process.env.NODE_ENV === "production") throw new Error(...)`. Cheap, fail-fast, no false-positives.
+- **Status:** OPEN
+- **Blocks-phase:** NO
+
+### FINDING-0053 — WebAuthn counter-regression doesn't escalate to logger.warn
+
+- **Severity:** Info
+- **Reporter:** owasp-top10-auditor
+- **Date opened:** 2026-05-04
+- **Phase:** 03
+- **Affected:** `apps/api/src/twofa/webauthn/webauthn-auth.service.ts:222-225`
+- **Description:** Counter-regression rejection emits an audit event with `reason: "counter_regression"` (correct) but at the default audit-log level. Counter regression is a strong clone-detection signal — an authenticator's monotonic counter going backwards is the textbook indicator of a cloned credential. Operators monitoring the API logs for clone-attempt patterns benefit from a dedicated `logger.warn` line in addition to the structured audit row.
+- **Recommendation:** Add `this.logger.warn({ evt: "webauthn.counter_regression", userId, credentialId })` next to the existing audit emit. Defer if log-noise is a concern — the audit row already captures it.
+- **Status:** OPEN
+- **Blocks-phase:** NO
+
+### FINDING-0034 — Stale JSDoc on `bumpEpoch` after FINDING-0031 fix
+
+- **Severity:** Info
+- **Reporter:** auth-flow-auditor (re-run)
+- **Date opened:** 2026-05-04
+- **Phase:** 03
+- **Affected:** `apps/api/src/auth/sessions/session.service.ts` `bumpEpoch` JSDoc (was lines 252-258)
+- **Description:** Surfaced during FINDING-0031 re-verification. The JSDoc on `bumpEpoch` claimed *"single-session revoke does NOT call this"* — accurate before the 0031 fix, stale after. Risk is doc drift: a future maintainer could "restore" the old behaviour believing the comment.
+- **Recommendation:** Rewrite JSDoc to describe the per-user grain and reference Truth 12 + the FINDING-0031 fold-in.
+- **Status:** VERIFIED-CLOSED (2026-05-04)
+- **Blocks-phase:** NO
+- **Fix:** JSDoc rewritten in same closure cycle as 0031 (`session.service.ts:252-260`). References Truth 12 + FINDING-0031.
+
+### FINDING-0054 — Pino redact list lacks names for new Phase-03 sensitive fields
+
+- **Severity:** Info
+- **Reporter:** owasp-top10-auditor
+- **Date opened:** 2026-05-04
+- **Phase:** 03
+- **Affected:** `apps/api/src/app.module.ts` (pino redact configuration)
+- **Description:** Pino's redact list doesn't explicitly name the new Phase-03 fields: `wrappedSecret`, `encryptedSecretAad`, `issuanceNonce`, `stepUpToken`, `candidateStep`. The wildcard `*.password` / `*.master_kek` / etc. patterns don't match these names. Defence-in-depth is partial: the structured audit emitter already strips them, but a stray `req.body` log (e.g. on a thrown exception that pino auto-serialises) could expose them.
+- **Recommendation:** Add the five field names to the redact array. Cosmetic but cheap.
+- **Status:** OPEN
+- **Blocks-phase:** NO
+
 ## Closed findings
 
 _(All FINDING-0001..0009 are VERIFIED-CLOSED above; kept inline for traceability rather than moved out, since they're the entire Phase 01 set. Future phases will move closed findings into this section.)_

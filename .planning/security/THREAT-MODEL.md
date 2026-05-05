@@ -735,3 +735,212 @@ The M0 top-10 items #1, #2, #3, #4, #6, #7, #9, #10 are unchanged.
   - **Phase 13:** §16.II same-origin review; §14.7 per-user-salt decision; AT-5b (M0 §9.5) pub-key TOFU.
 
 *End of Phase 02 expansion (2026-05-02).*
+
+---
+
+# === PHASE 03 EXPANSION — 2FA (WebAuthn + TOTP) + session management (2026-05-04) ===
+
+> **Author:** `threat-modeler` agent (informational; no gate authority).
+> **Trigger:** Phase 03 (2FA + sessions) implementation complete; per `03-INDEX.md` "Security gate" row, this expansion updates §17 leaves and adds §19 STRIDE-per-Phase-03-data-flow. Preserves §1–§18 unchanged. Cross-refs `.planning/phases/03-2fa-sessions/03-VERIFICATION.md` (20/20 structural truths verified), `03-INDEX.md` Truths 1–20, and STATE.md "Load-bearing decisions" extensions for Phase 03.
+>
+> **Scope of this expansion:** the 2FA + sessions surface that landed in Phase 03 — `POST /2fa/webauthn/{begin,finish}-{register,auth}`, `POST /2fa/totp/{begin,finish}-register`, `POST /2fa/totp/verify`, `GET /2fa/methods`, `DELETE /2fa/methods/:id`, `GET /sessions`, `DELETE /sessions/:id`, `POST /sessions/revoke-all`, plus the `/auth/login` 2FA-branch extension and the new session-epoch JWT claim. Updates §17 transition table for AT-5 leaves whose closure owners were Phase 03.
+
+---
+
+## 17.1 Phase 03 transitions (post-Phase-03 close)
+
+The §17 (post-Phase-02) entries are PRESERVED above. The following transitions are recorded as Phase 03 ships:
+
+| Item | Pre-Phase-03 status (from §15 / §17) | Post-Phase-03 status | Evidence |
+|---|---|---|---|
+| **Phishing without WebAuthn** (§17 NEW row, post-Phase-02) | **HIGH** (gated by Phase 03) | **MITIGATED-FOR-WEBAUTHN-USERS / RESIDUAL-FOR-TOTP-ONLY-USERS** — residual = users who never enrol any 2FA method, or who enrol only TOTP. WebAuthn enrolment closes the leaf for that user; TOTP enrolment does NOT (the 6-digit code is phishable). UX control (Truth 16, Key Link 12): `/settings/security` labels passkey "Recommended — phishing-resistant" and TOTP "Authenticator-app codes can be entered into a phishing site. Use a passkey when possible." | `apps/web/src/app/(authed)/settings/security/page.tsx`; `apps/api/src/twofa/webauthn/*`; `03-VERIFICATION.md` Truth 16 |
+| **AT-5 leaf A — stolen access token (15-min JWT)** | **MITIGATED** (TTL bound + memory-only); residual = in-page XSS/operator-bundle window | **MITIGATED-WITHIN-EPOCH-LATENCY** — `users.session_epoch INT NOT NULL DEFAULT 0` column landed; JWT carries `epoch` claim; `JwtAuthGuard` validates against a Redis-cached `users.session_epoch` (TTL 60s, busted on every write to the column). `POST /sessions/revoke-all` and `DELETE /sessions/:id` bump the column; mismatched epoch → 401 `AUTH_SESSION_REVOKED` (E1017). Worst-case attacker window after revoke = next-request latency + cache-bust delay (≈ p99 < 2 ms when cache busted; bounded above by `SESSION_EPOCH_CACHE_TTL` = 60 s on cache lag, but writes invalidate). **Closes Phase-02 deferred REQ-AUTH-004.** | `packages/db/src/schema/users.ts:76`; `apps/api/src/auth/jwt/jwt.service.ts:90,103,110`; `apps/api/src/auth/jwt/jwt-auth.guard.ts:105–110`; `apps/api/src/sessions/sessions.service.ts`; `03-VERIFICATION.md` Truths 12, 13, 14 |
+| **AT-5 leaf F — phishing** | **RESIDUAL** (Phase-02 close); closure owner = Phase 03 (REQ-2FA-001) | **MITIGATED-FOR-WEBAUTHN-USERS / RESIDUAL-FOR-TOTP-ONLY-USERS** — same as the §17 phishing row above. WebAuthn assertion is bound to `RP ID = pass.runadev.com` and `expectedOrigin = https://pass.runadev.com` (verified explicitly in `verifyAuthenticationResponse` per Key Link 9); a look-alike origin cannot produce a valid assertion. TOTP, by contrast, IS phishable (attacker prompts victim for the 6-digit code on look-alike origin and replays within ±1 step window). | `apps/api/src/twofa/webauthn/webauthn-auth.service.ts:218–229`; `apps/api/src/twofa/webauthn/webauthn-register.service.ts`; Phase 03 STATE-load-bearing decision pinning `WEBAUTHN_RP_ID = pass.runadev.com` |
+
+### New residual leaf added to AT-5 (Phase 03)
+
+```
+└─ H. TOTP secret extraction from compromised browser
+   ├─ Origin: A4-class client malware (RAT, malicious browser
+   │  extension, supply-chain JS) reads the in-memory `master_DEK`
+   │  while the user has the vault unlocked AND simultaneously reads
+   │  the wrapped TOTP blob from `totp_credentials.wrapped_secret`
+   │  (after legitimate /2fa/methods fetch or via DOM access on
+   │  /settings/security). Attacker can then unwrap offline and
+   │  generate valid 6-digit codes in perpetuity.
+   ├─ Mitigations at Phase 03:
+   │   • Server NEVER sees plaintext TOTP secret — wrap+verify is
+   │     browser-only (`packages/crypto/src/totp.ts`, re-exported from
+   │     `browser.ts` only; NodeJS barrel parity test enforces).
+   │   • AAD label `"sv:user-totp:v1|"` + per-user binder
+   │     `SHA256(lower(email))` ties the wrap blob to the user; an
+   │     attacker who steals only the DB row but NOT the master_DEK
+   │     cannot unwrap.
+   │   • `last_used_step` CAS replay guard (Plan 03-03; atomic
+   │     UPDATE...WHERE last_used_step < $cs RETURNING) prevents
+   │     replay of a SINGLE captured code, but does NOT prevent
+   │     attacker generating fresh codes after secret extraction.
+   │   • Session-epoch revoke (leaf A closure) does NOT close this
+   │     leaf — TOTP secret survives session revocation; only
+   │     `DELETE /2fa/methods/:id` (re-enrolment) rotates the secret.
+   ├─ Closure path: identical to A4 (§15 leaf E — client-side malware).
+   │  No v1 control closes this. Operator runbook should advise users
+   │  to re-enrol TOTP (delete + re-add) if device compromise is
+   │  suspected; recovery procedure in `docs/operator/RUNBOOK.md`.
+   └─ Verdict: **RESIDUAL** — same class as A4 client-malware in §15.
+              WebAuthn-only users are not exposed (the private key is
+              hardware-bound and non-extractable on a TPM/secure
+              enclave authenticator); this leaf is specific to TOTP.
+```
+
+**Implication:** WebAuthn is strictly stronger than TOTP against TWO independent leaves (F phishing, H secret-extraction). The Phase 03 UX primacy of passkey (Key Link 12 + Truth 16) is therefore not just "nice to have" — it is the strongest mitigation for both H and F at v1.
+
+### AT-5 leaf summary (refreshed at Phase 03 close)
+
+| Leaf | Verdict (post-Phase-03) | Owner of any residual closure |
+|---|---|---|
+| A — stolen access token | **MITIGATED-WITHIN-EPOCH-LATENCY** | — (epoch revocation closes the gap) |
+| B — stolen refresh token | MITIGATED | — |
+| C — credential stuffing | MITIGATED | — |
+| D — invite hijack | **PARTIAL** | Phase 07 (SMTP + email-binding) |
+| E — client-side malware (general) | **RESIDUAL** | Out-of-scope per §1 |
+| F — phishing | **MITIGATED-FOR-WEBAUTHN-USERS / RESIDUAL-FOR-TOTP-ONLY** | User enrolment behaviour; UX nudge in place |
+| G — backend compromise (session forgery) | RESIDUAL | Phase 14 (JWT rotation runbook); HSM/KMS = v2 |
+| **H — TOTP secret extraction (NEW)** | **RESIDUAL** | Same as E (client malware out-of-scope); user re-enrolment is the reactive lever |
+
+---
+
+## 19. Phase 03 — STRIDE per data flow
+
+Each row: **Threat** (S/T/R/I/D/E), **Description**, **Mitigation in shipped code**, **Residual risk**. File:line citations are illustrative; `03-VERIFICATION.md` is the authoritative source for what shipped where.
+
+### 19.1 Flow: `POST /auth/login` → step-up issuance (1FA-with-2FA branch)
+
+> Phase-02 §14.3 still applies for the 1FA verification step. The new surface is the **branch** that emits a step-up token instead of a full session when the user has ≥1 active 2FA method (Truth 8).
+
+| # | Threat | Description | Mitigation (Phase 03 shipped) | Residual |
+|---|---|---|---|---|
+| S | Spoofing | Attacker presents a step-up token belonging to a different user to a `/2fa/*` route | Step-up JWT carries `{sub, purpose:"2fa-stepup", epoch}`; `Require2FAStepUpGuard` validates `purpose === "2fa-stepup"` AND uses the embedded `sub` directly; no client-supplied user-id is honoured (Plan 03-02). | None. |
+| T | Tampering | Attacker downgrades the response shape to "1FA-only" to skip 2FA | Server-side branch is **purely server-authoritative**: `login.service.ts:137–161` queries `webauthn_credentials` + `totp_credentials` counts and CHOOSES the shape. Client cannot influence. The Zod-typed `LoginSessionResponseSchema` vs `LoginStepUpResponseSchema` discriminator on the **client** is defence-in-depth, not the boundary. | None at the protocol layer. |
+| R | Repudiation | Disputed step-up issuance | `auth.login.{ok,fail}` emits with a `requires2fa: bool` flag (per Plan 03-08); subsequent `/2fa/*` events chain on the same `requestId`. | Phase 10 hash-chain pending. |
+| I | Information disclosure | Pre-1FA: response shape leaks "this user has 2FA enabled" before the user has even authenticated | **Step-up branch ONLY taken AFTER 1FA passes** (Truth 8 explicit invariant). Both miss paths (unknown email / wrong password) still return the byte-identical 401 envelope from §14.3 row I. The step-up shape is only ever observable to a caller who already proved 1FA. | The fact that 2FA-enrolled users get a 200-with-step-up while 2FA-not-enrolled users get a 200-with-session is a **post-1FA signal**, accepted because the attacker has already proven 1FA at that point. |
+| D | DoS | Attacker forces the expensive 2FA-counts query on every login attempt | Counts query runs ONLY after 1FA Argon2id verify passes; 1FA throttler ceilings (`login-ip` 5/IP/min, `login-email` 10/email/h with sha256-keyed cap from FINDING-0022 fold-in) bound rate. | None practical. |
+| E | Elevation | Step-up token presented to non-`/2fa/*` route to bypass 2FA | `JwtAuthGuard` REJECTS any token with `payload.purpose !== undefined` (Key Link 5; Plan 03-02 SUMMARY); `Require2FAStepUpGuard` is the dual that ONLY accepts `purpose:"2fa-stepup"`. Two guards are mutually exclusive — neither bypass nor deadlock possible. | None known. Operator must NOT remove the purpose-reject in `JwtAuthGuard`; documented as Phase-03 load-bearing. |
+
+### 19.2 Flow: `POST /2fa/webauthn/{begin,finish}-register` (WebAuthn enrol)
+
+| # | Threat | Description | Mitigation | Residual |
+|---|---|---|---|---|
+| S | Spoofing | Forge an attestation from a non-existent authenticator | `verifyRegistrationResponse` from `@simplewebauthn/server` v11 with `expectedRPID = WEBAUTHN_RP_ID` and `expectedOrigin = WEBAUTHN_ORIGIN` passed EXPLICITLY (Key Link 9); attestation = `none` accepted because operator-issued invites at ≤50 user scale do not benefit from authenticator-vendor allow-listing (Operator decision #3). | An attacker with a malicious authenticator hardware AND physical access to the user's account at enrolment time could enrol it. Out-of-scope (A4-class). |
+| T | Tampering | Replay a captured challenge | 32-byte `randomBytes` challenge persisted in `webauthn_challenges(user_id, kind, expires_at, ...)` with TTL=120s and **atomic consume** via `DELETE FROM webauthn_challenges WHERE id = $1 RETURNING challenge` — zero rows → 400 `WEBAUTHN_CHALLENGE_INVALID` (Key Link 2). NEVER look-up-then-delete (TOCTOU bar). | None — atomic by Postgres semantics. |
+| R | Repudiation | Disputed enrolment | `auth.2fa.webauthn.register.{ok,fail}` audit events. | Phase 10 hash-chain pending. |
+| I | Information disclosure | Attestation leaks identifying info about the authenticator vendor / hardware | `attestation = "none"` policy: client returns a self-attestation, no AAGUID-correlatable cert chain returned to server beyond the AAGUID itself (which IS stored — by design, for future `Phase 13` authenticator-allow-list capability). | None at v1 scale. |
+| D | DoS | Spam-enrol to flood `webauthn_challenges` | New user-keyed `2fa-register-user` throttler (FINDING-0021 fold-in landed in Plan 09); challenges TTL=120s self-clear. | None practical. |
+| E | Elevation | Bind a passkey to another user's account | `user_id` on the challenge row is taken from `req.user.sub` (server-authoritative); finish endpoint matches challenge by `(id, user_id)` AND consumes atomically. Unauthenticated callers blocked at `JwtAuthGuard`. | None known. |
+
+### 19.3 Flow: `POST /2fa/webauthn/{begin,finish}-auth` (WebAuthn step-up)
+
+| # | Threat | Description | Mitigation | Residual |
+|---|---|---|---|---|
+| S | Spoofing | Phishing — look-alike origin captures an assertion | **WebAuthn RP-ID + origin binding closes this**: the authenticator signs over the actual origin presented to it (`https://pass.runadev.com`); a look-alike origin produces an assertion that fails server-side `verifyAuthenticationResponse` because `expectedOrigin` and `expectedRPID` will not match. **This is the AT-5 leaf F closure for WebAuthn-enrolled users.** | If the operator ever changes `WEBAUTHN_RP_ID` (e.g. apex → `www.`), all existing passkeys break — data-migration event documented in RUNBOOK (Key Link 1). |
+| T | Tampering | Counter regression — clone authenticator, replay assertion | `webauthn-auth.service.ts:218–229` rejects `newCounter <= cred.counter` when `cred.counter > 0` and emits `auth.2fa.webauthn.auth.fail` with `reason: counter_regression`. | An authenticator that always returns `counter = 0` (allowed by spec for some platform authenticators) cannot detect cloning by counter; the platform's own anti-extraction is the only line of defence. Documented limit. |
+| R | Repudiation | Disputed step-up | `auth.2fa.webauthn.auth.{ok,fail}` audit events with reason. | Phase 10 hash-chain pending. |
+| I | Information disclosure | `allowCredentials` leaks the user's enrolled credential IDs to a pre-1FA attacker | `begin-auth` is gated by `Require2FAStepUpGuard` — caller MUST already hold a valid step-up token (i.e. has passed 1FA). A pre-1FA attacker cannot reach this endpoint. | Post-1FA, the credential IDs ARE visible; this is inherent to WebAuthn ceremony. Accepted. |
+| D | DoS | Spam begin-auth to exhaust challenge rows | `2fa-verify-user` throttler (user-keyed, FINDING-0021 fold-in). | None practical. |
+| E | Elevation | Promote a step-up token without actually completing 2FA | finish-auth: (a) `Require2FAStepUpGuard` validates step-up token; (b) `verifyAuthenticationResponse` succeeds; (c) atomic challenge consume; (d) counter-regression check; (e) ONLY THEN issue a full access JWT + refresh cookie. Any failure short-circuits and leaves the step-up token still valid for the remaining TTL. | None known. |
+
+### 19.4 Flow: `POST /2fa/totp/{begin,finish}-register` (TOTP enrol)
+
+| # | Threat | Description | Mitigation | Residual |
+|---|---|---|---|---|
+| S | Spoofing | Server fabricates a TOTP secret it controls and impersonates the user later | **Server NEVER sees the plaintext secret by construction** (Key Link 3; Truth 5). The 20-byte secret is generated client-side in `packages/crypto/src/totp.ts` (browser-only barrel — Node import fails parity test); the client computes the wrap under `master_DEK` with AAD label `"sv:user-totp:v1|"` + per-user binder `SHA256(lower(email))` and posts ONLY the wrapped blob. `grep -r "totp" apps/api/src` for `master_DEK` / `master_kek` returns ZERO implementation references (only Pino redaction keys + docstring assertions per `03-VERIFICATION.md` notes). | A compromised browser bundle (A4 / operator-pushed) could exfiltrate the secret at generation time — leaf H residual. |
+| T | Tampering | Attacker submits a wrapped blob whose AAD doesn't bind to the user | AAD includes `SHA256(lower(email))` per-user binder; if attacker wraps under a different user's binder, the authenticated decryption at verify-time fails on the legit user's browser — they cannot use it; if they wrap under their OWN binder and post under victim's session, the server stores a blob that ONLY their `master_DEK` can unwrap, but they don't have victim's master_DEK — so they cannot generate codes for victim's account. The only winning attack is to actually possess victim's master_DEK, which is leaf H or A4. | Same as leaf H. |
+| R | Repudiation | Disputed enrolment | `auth.2fa.totp.register.{ok,fail}` audit events. | Phase 10 hash-chain pending. |
+| I | Information disclosure | Server logs leak wrapped secret OR the QR/provisioning URL crosses the wire | Pino redaction extended to `*.wrapped*`, `*.totp*` keys. The provisioning URL (`otpauth://...`) is generated **client-side in the browser**; server only emits an opaque issuance nonce in `begin-register`. The QR PNG is rendered in-browser. | If the user takes a screenshot of the QR + sends it to a cloud sync (Apple Photos / Google Photos), the secret is now off-device. UX warning is operator-runbook-level. |
+| D | DoS | Spam enrolment to fill `totp_credentials` | `2fa-register-user` throttler (user-keyed). | None practical. |
+| E | Elevation | Enrolment-time code is reusable as the first verify | `finish-register` seeds `last_used_step` to the verified candidate step (`totp.service.ts:119,143`); subsequent `/2fa/totp/verify` with the same step → CAS returns zero rows → `AUTH_2FA_TOTP_REPLAY` (E1015). The enrolment code is BURNED at insert. | None known. |
+
+### 19.5 Flow: `POST /2fa/totp/verify` (TOTP step-up)
+
+| # | Threat | Description | Mitigation | Residual |
+|---|---|---|---|---|
+| S | Spoofing | Phishing — look-alike origin captures the 6-digit code, replays within ±1 step (~30–60 s window) | **TOTP IS PHISHABLE.** No origin-binding exists (the user types a 6-digit code that is valid on any site). The only deterrent is the client-side anti-enumeration on `/auth/login` that removes the "is this the real site?" oracle (§14.3 row I); once the attacker captures the code AND the master_password+secret_key, they replay against the real site within the step window. **Mitigation level: documented residual; UX nudges user toward WebAuthn.** | **AT-5 leaf F open for TOTP-only users.** Closure path = enrol a passkey. |
+| T | Tampering | CAS replay guard race — two concurrent verifies of the same code | `UPDATE totp_credentials SET last_used_step = $cs WHERE id = $cid AND last_used_step < $cs RETURNING *` is an atomic Postgres compare-and-swap (Key Link 4). One winner, one loser-with-zero-rows → 401 `AUTH_2FA_TOTP_REPLAY` (E1015). | None — Postgres serialises. |
+| R | Repudiation | Disputed verify | `auth.2fa.totp.verify.{ok,fail}` audit events with `requestId`. | Phase 10 hash-chain pending. |
+| I | Information disclosure | Server log leaks the 6-digit code | Pino redaction list includes the verify body fields. The candidate step is logged (it's a non-secret integer counter), but the code itself is not. | The 6-digit code IS transmitted to the server in the verify request body — by-design (Plan 03-03 chose to send `candidateStep` after client-side compute). Plaintext-on-wire is bounded by TLS; not in audit logs. |
+| D | DoS | Brute-force a 6-digit code (10⁶ space) | `2fa-verify-user` throttler caps user-keyed verify attempts; CAS replay guard ensures any earlier-step or same-step submission fails fast. | A persistent attacker against a single user with valid step-up tokens (each with 120 s TTL, requiring fresh 1FA each time) is rate-limited two-axis: (a) verify-user ceiling, (b) login-email ceiling 10/email/h. Combined the practical brute-force rate is ≪ 10⁶ / window. |
+| E | Elevation | Capture step N's code, also use step N+1 within ±1 step drift | Verify accepts only `cs >= last_used_step + 1` (Key Link 4 explicit clause). If legit user used step N+1 first, attacker's later submission of N+1 fails CAS. | If attacker is FASTER than the legit user, attacker can burn step N+1 themselves — but they STILL need master_password+secret_key (they don't get them from the code alone). Phishing-without-WebAuthn is the actual exposure vector here. |
+
+### 19.6 Flow: `GET /2fa/methods` and `DELETE /2fa/methods/:id` (2FA list + remove + removal-guard)
+
+| # | Threat | Description | Mitigation | Residual |
+|---|---|---|---|---|
+| S | Spoofing | Cross-user list / delete attempt | `JwtAuthGuard` (epoch-validated); list scoped to `req.user.id`; delete on cross-user id returns **404 NOT 403** (anti-enumeration; Key Link in 03-INDEX security gate `access-control-auditor` row). | None known. |
+| T | Tampering | Manipulate response to leak secret material | List response selects only `{id, kind, name, createdAt, lastUsedAt}` — NEVER `wrapped_secret`, `public_key`, `counter`, `aaguid` (`methods.service.ts:99–245`; verified Truth 9). | None at the response layer. |
+| R | Repudiation | Disputed removal | `auth.2fa.method.remove.{ok,fail}` audit events. | Phase 10 hash-chain pending. |
+| I | Information disclosure | Cross-user existence-probe via 404 vs 403 | Uniform 404 on cross-user (anti-enumeration). | None known. |
+| D | DoS | Spam list / delete | `2fa-register-user` (delete) + user-keyed `/me`-class throttler on list. | None practical. |
+| E | Elevation | Remove last 2FA method while user has shared-vault dependency | **`Require2FAGuard` removal-guard** (Truth 10; Key Link 7): `DELETE /2fa/methods/:id` checks `(remaining_count == 0) && userHasSharedVaultDependency(userId)` → 409 `AUTH_2FA_REMOVAL_BLOCKED` (E1018). At Phase 03 the dependency function returns `false` unconditionally (no shared vaults exist yet); integration test stubs the function to assert the 409 path works. **Phase 07 only has to flip the implementation** — the guard wiring is locked. | If a future maintainer accidentally removes the `Require2FAGuard` decorator from the route, a Phase-07 user could remove their last 2FA while owning shared-vault material. Test stub at `apps/api/src/twofa/methods/methods.service.ts:32` is the regression sentinel. |
+
+### 19.7 Flow: `GET /sessions` and `DELETE /sessions/:id` and `POST /sessions/revoke-all` (session list + revoke)
+
+| # | Threat | Description | Mitigation | Residual |
+|---|---|---|---|---|
+| S | Spoofing | Cross-user session list / revoke | `JwtAuthGuard` (epoch-validated); list scoped to `req.user.id`; revoke on cross-user `sessionId` returns 404 NOT 403 (anti-enumeration; Truth 12 explicit). | None known. |
+| T | Tampering | Manipulate response to leak full ip-hash | Response carries `ipHashB64Prefix` = first 6 chars of base64-encoded ip-hash only (Truth 11). The full hash never crosses the wire. | A user comparing prefixes across many sessions over time COULD, in principle, narrow the hash space — but the prefix is stable per-network only as far as the operator's salt rotation policy permits, and the usage is "user recognises my-own-network" not "attacker fingerprints victim". Accepted. |
+| R | Repudiation | Disputed revoke | `auth.session.revoke.{ok,fail}` and `auth.session.revoke_all.ok` events. | Phase 10 hash-chain pending. |
+| I | Information disclosure | Reveal currently-active session count to anyone holding any session | Caller must be the owning user (epoch-validated); pre-auth observers see nothing. | None at v1 scope. |
+| D | DoS | Spam revoke-all to thrash session_epoch + cache-bust storm | `sessions-revoke-all-user` user-keyed throttler caps the revoke-all rate per user; `sessions-revoke-user` for per-session deletes; `sessions-list-user` for list. | A user repeatedly self-revoking would only DoS themselves. |
+| E | Elevation | Revoke-all does not invalidate the CURRENT request's access token → attacker who triggered it keeps their session | `revoke-all` bumps `users.session_epoch`; the current access token's epoch claim is now stale; **next** request → `JwtAuthGuard` epoch-mismatch → 401 `AUTH_SESSION_REVOKED` (E1017). The current refresh cookie is also family-revoked. The window is bounded by next-request latency. UI flow: web client wipes local key-store + redirects to `/login` immediately on success (Truth 17). | The current request returns 200 `{revokedCount}` BEFORE the epoch takes effect — accepted because the requester IS the legitimate user and the next call from any client (legit or attacker holding a stolen access token) fails epoch check. |
+
+### 19.8 Flow: 2FA-removal guard (cross-cutting STRIDE — when removal is blocked)
+
+> See §19.6 row E. This is called out as a separate row because it is the **bridge invariant** to Phase 07: the guard wiring + integration-test stub is what prevents a Phase-07-shared-vault user from de-2FA'ing themselves.
+
+| # | Threat | Description | Mitigation | Residual |
+|---|---|---|---|---|
+| E | Elevation | Phase-07 hand-off failure: maintainer flips `userHasSharedVaultDependency` to live impl WITHOUT wiring shared-vault membership reads correctly, or removes the decorator on the route | Integration test (Plan 03-06) stubs the dependency function to `() => true` and asserts 409 on removal-of-last-method — this test will FAIL if (a) the guard is removed from the route, or (b) the function signature drifts. The test is the regression sentinel for Phase 07. | If the test is also removed alongside the guard, the regression goes silent. Phase-07 threat-modeler re-pass should re-verify the guard is still wired AND the integration test still exists. |
+
+---
+
+## 19.9 Cross-cutting load-bearing assertions added in Phase 03
+
+The §16 list (Phase 02) gains the following pinned assumptions. **Changing any of these REQUIRES re-running `threat-modeler`.**
+
+**VI. Session-epoch column on `users`** (STATE.md Phase-03 load-bearing decision; Operator decision #4).
+- `users.session_epoch INT NOT NULL DEFAULT 0`. JWT carries `epoch`. `JwtAuthGuard` validates against a Redis-cached read with `SESSION_EPOCH_CACHE_TTL` (default 60 s) busted on every write to the column.
+- **THIS COLUMN CANNOT BE DROPPED, RENAMED, OR HAVE ITS DEFAULT CHANGED** without simultaneously updating `jwt.service.ts` AND `jwt-auth.guard.ts` AND the cache-bust paths. A drift here = silent session-revoke breakage.
+- *Reverting condition:* moving to per-session-id Redis revocation set instead would remove this column dependency but lose the "self-contained primitive that survives Redis outage" property. Phase 13 review item if Redis becomes load-bearing elsewhere anyway.
+
+**VII. WebAuthn `RP ID = pass.runadev.com` (apex; not `www.`)** (Operator decision #1; Key Link 1).
+- Bound into every passkey at registration. **Changing `WEBAUTHN_RP_ID` is a data-migration event** — every previously-registered passkey breaks because the RP ID is part of the credential's effective name in the authenticator.
+- `WEBAUTHN_ORIGIN = https://pass.runadev.com` MUST be passed explicitly to both `verifyRegistrationResponse` and `verifyAuthenticationResponse` (defaults are not safe per `@simplewebauthn/server` v11 — Key Link 9).
+- *Reverting condition:* none planned for v1. If subdomain routing is ever introduced (§16.II's open invariant), the RP ID + origin invariants break in the same direction as the `__Host-` cookie.
+
+**VIII. Step-up token vs access JWT mutual-exclusion via `purpose` claim** (Key Link 5).
+- `JwtAuthGuard` REJECTS any token where `payload.purpose !== undefined`. `Require2FAStepUpGuard` ONLY accepts `purpose:"2fa-stepup"`. Removing either side = either bypass (step-up presented to vault routes) or deadlock (no token works anywhere).
+- *Footgun for future maintainer:* don't "simplify" by collapsing the two guards into one parameterised guard. The mutual-exclusion is the security boundary.
+
+**IX. TOTP secret is browser-only (server-side parity test enforces)** (Key Link 3; Truth 5).
+- `packages/crypto/src/totp.ts` is re-exported from `browser.ts` only; `node.ts` named-export parity test FAILS if `totp` symbols ever leak into the Node barrel. The server CANNOT import the helpers — even if a future maintainer mistakenly tries.
+- *Reverting condition:* none. TOTP-server-side would be a fundamental crypto-architecture regression.
+
+**X. 2FA-removal guard wiring + Phase-07 stub function** (Key Link 7; Truth 10).
+- `userHasSharedVaultDependency(userId)` exported from `apps/api/src/twofa/methods/methods.service.ts:32` MUST return `false` at Phase 03 and MUST return the live shared-vault membership check at Phase 07. The integration test that stubs `() => true` is the regression sentinel — removing it = silent loss of the guard's only Phase-07 test.
+
+---
+
+## 19.10 Auditor cross-references & open notes (Phase 03)
+
+- **For `auth-flow-auditor` Phase 03:** §19.1 row I (login does NOT leak 2FA presence pre-1FA — confirm in `login.service.ts` that the counts query is post-Argon2id-verify); §19.5 row T (concurrent TOTP CAS race); §19.3 row T (counter regression on cloned authenticator); §19.6 row E (removal-guard 409 path stubbed); §19.7 row E (revoke-all bumps epoch + current request returns BEFORE next-request epoch fail).
+- **For `crypto-auditor` Phase 03:** §19.4 row S (server never sees TOTP plaintext — re-grep `apps/api/src` for `master_DEK`/`master_kek` to confirm zero implementation refs); AAD label `"sv:user-totp:v1|"` follows §16.III scheme; WebAuthn challenge nonce is 32 random bytes via `crypto.randomBytes`; challenge consume is atomic (`DELETE … RETURNING`); `@simplewebauthn/server` v11 origin/RP-ID passed explicitly; counter regression check; step-up JWT signed with same `JWT_SECRET` as access JWT (no split-secret).
+- **For `owasp-top10-auditor` Phase 03:** A01 (only owner manages own 2FA + sessions — §19.6, §19.7 row S); A02 (TOTP secret never reaches server — §19.4 row S; master_DEK never leaves browser); A07 auth failures (§19.5 row D rate-limit + uniform error envelope on TOTP / WebAuthn fail).
+- **For `access-control-auditor` Phase 03 (NEW at this gate):** §19.6 row S + §19.7 row S (uniform 404 NOT 403 on cross-user); §19.7 row E (session_epoch is per-USER not per-session, so revoke-all atomically kills all access tokens for that user).
+- **Threat-modeler open notes for future phases:**
+  - **Phase 07:** AT-5 leaf D (invite hijack) — closure now requires SMTP + email-binding; the bearer-token framing weakens to "bearer-on-channel-bound-to-email". Also flip `userHasSharedVaultDependency` (Assertion X above) and re-verify the integration test still exists.
+  - **Phase 07:** §19.8 — re-verify Require2FAGuard is still on the vault.* routes (the EXPOSE_TEST_ROUTES probe goes away; real routes take its place).
+  - **Phase 10:** Several rows in §19 list "Phase 10 hash-chain pending" as the residual on R (repudiation) — once the hash-chain ships, those become MITIGATED.
+  - **Phase 13:** §16.II same-origin review propagates to §19.3 row S (WebAuthn RP-ID/origin invariant); §14.7 per-user-salt decision; AT-5b (M0 §9.5) pub-key TOFU.
+  - **Phase 14:** Operator runbook should explicitly call out that "remove + re-enrol TOTP" is the user-facing reactive lever for AT-5 leaf H (TOTP secret extraction) post-device-compromise.
+
+*End of Phase 03 expansion (2026-05-04).*
