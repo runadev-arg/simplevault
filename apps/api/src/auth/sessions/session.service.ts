@@ -251,10 +251,13 @@ export class SessionService implements OnModuleInit {
 
   /**
    * Phase 03 / Plan 04 — bump `users.session_epoch` for `userId` and
-   * invalidate the cached entry. Call this from `/sessions/revoke-all`
-   * (Plan 05) — single-session revoke (`DELETE /sessions/:id`) does NOT
-   * call this (per Plan 04 Key Link 3 — bumping per single-session-revoke
-   * would invalidate other valid sessions' access tokens for the same user).
+   * invalidate the cached entry. Called from BOTH `revoke-all` AND
+   * single-session revoke (`DELETE /sessions/:id`) per Truth 12 of
+   * `03-INDEX.md`. Per-user grain is the correct grain because access
+   * tokens carry only `epoch`, not `sid`/`fam` — a stolen access token is
+   * bound to the user, not the session. Forcing other live sessions to
+   * one transparent /auth/refresh is the trade we accept for closing
+   * AT-5 leaf A under revoke-one (FINDING-0031 fold-in 2026-05-04).
    *
    * Ordering: UPDATE first (commits in the implicit transaction Postgres
    * wraps around `execute`), THEN DEL the cache. The opposite order would
@@ -375,8 +378,16 @@ export class SessionService implements OnModuleInit {
    * controller maps to 404 NOT 403). Family-revoke semantics: every
    * non-revoked row sharing the family is marked revoked.
    *
-   * Does NOT bump the epoch (single-session-revoke is intentionally softer
-   * than revoke-all — Plan 04 Key Link 3). Only `revokeAllForUser` bumps.
+   * Bumps `users.session_epoch` after the revoke so all outstanding access
+   * tokens for the user fail closed within ≤ next-request latency. Per-user
+   * (not per-session) is the correct grain because access tokens carry only
+   * `epoch`, not `sid`/`fam` — a stolen access token is bound to the user,
+   * not the session, so killing only the targeted family without bumping
+   * would leave a stolen access token alive for up to ACCESS_TOKEN_TTL. The
+   * UX cost (other live sessions force one transparent /auth/refresh on
+   * their next call and re-mint under the new epoch) is the trade we accept
+   * for closing AT-5 leaf A under revoke-one. Order is load-bearing — see
+   * the matching note in `revokeAllForUser`.
    *
    * Returns `{familyId, revokedCount}` on success, `null` on cross-user /
    * non-existent / already-revoked (callers must NOT distinguish — anti-
@@ -408,6 +419,7 @@ export class SessionService implements OnModuleInit {
       // own it" — the leaked bit is identical).
       return null;
     }
+    await this.bumpEpoch(userId);
     return { familyId: row.familyId, revokedCount };
   }
 

@@ -12,7 +12,7 @@ import { AuditAction, AuditEventService } from "../common/audit-events.js";
  * management endpoints (Truths 11–13):
  *
  *   - GET    /sessions             — list active sessions for `req.user.id`.
- *   - DELETE /sessions/:id         — family-revoke that one session.
+ *   - DELETE /sessions/:id         — family-revoke that one session + bumpEpoch.
  *   - POST   /sessions/revoke-all  — family-revoke ALL + bumpEpoch.
  *
  * Heavy lifting (DB queries, epoch bump) is delegated to `SessionService`;
