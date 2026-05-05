@@ -23,10 +23,26 @@ export const AAD_LABEL_KX_SK = "sv:user-kx-sk:v1|" as const;
  * Server NEVER sees the plaintext secret.
  */
 export const AAD_LABEL_TOTP = "sv:user-totp:v1|" as const;
+/**
+ * Phase 04 — vault credential blob AAD label. FROZEN.
+ *
+ * Per-credential AAD =
+ *   utf8(AAD_LABEL_VAULT_CREDENTIAL)
+ *   || sha256(lower(email))
+ *   || canonicalJson({ vaultId, credentialId, version })
+ *
+ * Plan 04-04 builds the AAD via `buildVaultCredentialAad` which imports
+ * THIS constant — never re-declares the literal (closes FINDING-0026 by
+ * construction). Bumping the v-suffix is a data-migration event: every
+ * existing credential blob fails AEAD-unwrap until re-wrapped with the
+ * new label.
+ */
+export const AAD_LABEL_VAULT_CREDENTIAL = "sv:vault-credential:v1|" as const;
 
 export type AadLabel =
   | typeof AAD_LABEL_MASTER
   | typeof AAD_LABEL_RECOVERY
   | typeof AAD_LABEL_SIGN_SK
   | typeof AAD_LABEL_KX_SK
-  | typeof AAD_LABEL_TOTP;
+  | typeof AAD_LABEL_TOTP
+  | typeof AAD_LABEL_VAULT_CREDENTIAL;

@@ -107,7 +107,17 @@ export class SignupService {
           throw new Error("user insert returned no rows");
         }
 
-        // 3. Atomic redeem — single-shot UPDATE so concurrent winners race to 0 rows.
+        // 3. Auto-create the personal vault row in the SAME transaction
+        //    (Plan 04-01 / Truth 19 / Key Link 10). The unique partial index
+        //    `vaults_owner_personal_uidx` guarantees at most one personal
+        //    vault per user; a failure here rolls back the user insert too,
+        //    so users.exists ⇒ vaults.personal.exists is invariant.
+        await tx.insert(schema.vaults).values({
+          ownerUserId: newUser.id,
+          kind: "personal",
+        });
+
+        // 4. Atomic redeem — single-shot UPDATE so concurrent winners race to 0 rows.
         const updated = await tx
           .update(schema.inviteCodes)
           .set({ redeemedAt: new Date(), redeemedUserId: newUser.id })
