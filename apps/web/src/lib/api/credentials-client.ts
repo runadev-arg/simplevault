@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { request } from "./auth-client";
 import { b64UrlToBytes, bytesToB64Url } from "./base64url";
+import { mapCredentialError } from "./errors";
 
 /**
  * Phase 04 / Plan 06 — typed wrappers for the credentials + personal-vault
@@ -125,19 +126,23 @@ export async function createCredential(
   accessToken: string,
   input: CreateCredentialInput,
 ): Promise<CredentialSummary> {
-  return request("/credentials", {
-    method: "POST",
-    body: {
-      vaultId: input.vaultId,
-      ...(input.credentialId !== undefined ? { credentialId: input.credentialId } : {}),
-      ciphertext: bytesToB64Url(input.ciphertext),
-      nonce: bytesToB64Url(input.nonce),
-      aadParamsJson: input.aadParamsJson,
-      version: 1,
-    },
-    schema: CredentialSummaryWireSchema,
-    accessToken,
-  });
+  try {
+    return await request("/credentials", {
+      method: "POST",
+      body: {
+        vaultId: input.vaultId,
+        ...(input.credentialId !== undefined ? { credentialId: input.credentialId } : {}),
+        ciphertext: bytesToB64Url(input.ciphertext),
+        nonce: bytesToB64Url(input.nonce),
+        aadParamsJson: input.aadParamsJson,
+        version: 1,
+      },
+      schema: CredentialSummaryWireSchema,
+      accessToken,
+    });
+  } catch (e) {
+    throw mapCredentialError(e);
+  }
 }
 
 /**
@@ -153,11 +158,16 @@ export async function getCredential(
   accessToken: string,
   id: string,
 ): Promise<CredentialResponse> {
-  const raw = await request(`/credentials/${encodeURIComponent(id)}`, {
-    method: "GET",
-    schema: CredentialResponseWireSchema,
-    accessToken,
-  });
+  let raw;
+  try {
+    raw = await request(`/credentials/${encodeURIComponent(id)}`, {
+      method: "GET",
+      schema: CredentialResponseWireSchema,
+      accessToken,
+    });
+  } catch (e) {
+    throw mapCredentialError(e, { credentialId: id });
+  }
   return {
     id: raw.id,
     vaultId: raw.vaultId,
@@ -180,17 +190,21 @@ export async function updateCredential(
   id: string,
   input: UpdateCredentialInput,
 ): Promise<CredentialSummary> {
-  return request(`/credentials/${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    body: {
-      ciphertext: bytesToB64Url(input.ciphertext),
-      nonce: bytesToB64Url(input.nonce),
-      aadParamsJson: input.aadParamsJson,
-      version: input.version,
-    },
-    schema: CredentialSummaryWireSchema,
-    accessToken,
-  });
+  try {
+    return await request(`/credentials/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: {
+        ciphertext: bytesToB64Url(input.ciphertext),
+        nonce: bytesToB64Url(input.nonce),
+        aadParamsJson: input.aadParamsJson,
+        version: input.version,
+      },
+      schema: CredentialSummaryWireSchema,
+      accessToken,
+    });
+  } catch (e) {
+    throw mapCredentialError(e, { credentialId: id });
+  }
 }
 
 /**
@@ -201,9 +215,13 @@ export async function deleteCredential(
   accessToken: string,
   id: string,
 ): Promise<void> {
-  await request(`/credentials/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-    schema: z.unknown(),
-    accessToken,
-  });
+  try {
+    await request(`/credentials/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      schema: z.unknown(),
+      accessToken,
+    });
+  } catch (e) {
+    throw mapCredentialError(e, { credentialId: id });
+  }
 }
