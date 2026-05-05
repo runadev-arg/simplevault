@@ -125,11 +125,30 @@ describe("generator source — Math.random clean", () => {
 describe("generatePassphrase — invariants", () => {
   it("returns wordCount words joined by separator (1000 trials)", () => {
     const wordSet = new Set(EFF_LARGE);
+    // Use a separator no EFF word can contain (whitespace) so the split is
+    // unambiguous. The operator default of "-" is exercised in a separate
+    // test below — the EFF list contains 4 hyphenated words ("drop-down",
+    // "felt-tip", "t-shirt", "yo-yo") so a simple split on "-" can yield
+    // more than `wordCount` parts; that property is asserted indirectly
+    // (length-and-membership) rather than via raw split count.
     for (let i = 0; i < 1000; i++) {
-      const ph = generatePassphrase({ wordCount: 5, separator: "-" });
-      const parts = ph.split("-");
+      const ph = generatePassphrase({ wordCount: 5, separator: " " });
+      const parts = ph.split(" ");
       expect(parts.length).toBe(5);
       for (const w of parts) expect(wordSet.has(w)).toBe(true);
+    }
+  });
+
+  it("default '-' separator: produces a non-empty string with at least wordCount-1 '-' chars (1000 trials)", () => {
+    // The EFF list contains 4 hyphenated entries, so `split('-').length`
+    // can exceed `wordCount` — the strict word-membership invariant is
+    // covered by the whitespace-separator test above. Here we only assert
+    // the operator-confirmed default doesn't blow up.
+    for (let i = 0; i < 1000; i++) {
+      const ph = generatePassphrase({ wordCount: 5, separator: "-" });
+      expect(ph.length).toBeGreaterThan(0);
+      const dashCount = (ph.match(/-/g) ?? []).length;
+      expect(dashCount).toBeGreaterThanOrEqual(4);
     }
   });
 
