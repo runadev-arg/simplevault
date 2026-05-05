@@ -26,14 +26,14 @@
  * ciphertext. Cap = 10; oldest evicted.
  */
 
-import type { JSX } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import {
   buildVaultCredentialAad as buildAadImpl,
   canonicalCredentialAadJson,
   ready,
 } from "@simplevault/crypto/browser";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import type { JSX } from "react";
 
 import { CredentialEditor } from "../../../../components/credential-editor";
 import { me as apiMe } from "../../../../lib/api/auth-client";
@@ -99,6 +99,7 @@ export default function EditCredentialPage(): JSX.Element {
           apiMe(accessToken),
           getCredential(accessToken, id),
         ]);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (cancelled) return;
         const aad = buildAad(vault.vaultId, id, blob.version, who.email);
         const json = await decryptCredential(
@@ -114,6 +115,7 @@ export default function EditCredentialPage(): JSX.Element {
           decrypted,
         });
       } catch (e) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (cancelled) return;
         if (e instanceof Error && e.message.includes("history")) {
           setBootError(

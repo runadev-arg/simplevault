@@ -20,10 +20,13 @@
  * is the natural post-create destination.
  */
 
-import type { JSX } from "react";
+import {
+  canonicalCredentialAadJson,
+  ready,
+} from "@simplevault/crypto/browser";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ready } from "@simplevault/crypto/browser";
+import type { JSX } from "react";
 
 import { CredentialEditor } from "../../../../components/credential-editor";
 import { me as apiMe } from "../../../../lib/api/auth-client";
@@ -41,7 +44,6 @@ import {
   DecryptedCredentialSchema,
   type DecryptedCredential,
 } from "../../../../lib/vault/credential-shape";
-import { canonicalCredentialAadJson } from "@simplevault/crypto/browser";
 
 export default function NewCredentialPage(): JSX.Element {
   const router = useRouter();
@@ -62,9 +64,11 @@ export default function NewCredentialPage(): JSX.Element {
           listVaultPersonal(accessToken),
           apiMe(accessToken),
         ]);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (cancelled) return;
         setCtx({ vaultId: vault.vaultId, email: who.email });
       } catch (e) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (cancelled) return;
         setBootError(
           e instanceof Error ? e.message : "Failed to load vault context",

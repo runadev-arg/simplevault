@@ -20,10 +20,9 @@
  * Empty state: CTA → `/credential/new` (Plan 04-10).
  */
 
-import type { JSX } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-
 import { ready } from "@simplevault/crypto/browser";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { JSX } from "react";
 
 import { CardGrid } from "../../../components/aceternity/cards/card-grid";
 import {
@@ -117,6 +116,7 @@ export default function VaultPage(): JSX.Element {
           const blobs = await Promise.all(
             list.credentialIds.map((c) => getCredential(accessToken, c.id)),
           );
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
           if (cancelled) return;
           const decryptedAll = await Promise.all(
             blobs.map(async (blob, idx) => {
@@ -137,6 +137,7 @@ export default function VaultPage(): JSX.Element {
               return { id: cred.id, password: parsed.password };
             }),
           );
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
           if (cancelled) return;
           // Filter nulls (defensive — index lookup should never miss).
           const items = decryptedAll.filter(
