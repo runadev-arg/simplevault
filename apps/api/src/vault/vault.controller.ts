@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UseGuards } from "@nestjs/common";
+import { Controller, Get, Param, ParseUUIDPipe, Req, UseGuards } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 
 import { JwtAuthGuard, type AuthedRequest } from "../auth/jwt/jwt-auth.guard.js";
@@ -38,5 +38,19 @@ export class VaultController {
   })
   async getPersonal(@Req() req: AuthedRequest): Promise<PersonalVaultSummary> {
     return this.svc.getPersonal(req.user.id);
+  }
+
+  @Get(":id")
+  @Throttle({
+    [RateLimits.vaultListUser.name]: {
+      limit: RateLimits.vaultListUser.limit,
+      ttl: RateLimits.vaultListUser.ttl,
+    },
+  })
+  async getVault(
+    @Req() req: AuthedRequest,
+    @Param("id", new ParseUUIDPipe()) id: string,
+  ): Promise<PersonalVaultSummary> {
+    return this.svc.getVaultSummary(req.user.id, id);
   }
 }

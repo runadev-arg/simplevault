@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
+import { ErrorCodes } from "@simplevault/shared/errors";
 import { sql } from "drizzle-orm";
 
 import { DbService } from "../db/db.service.js";
@@ -33,6 +34,43 @@ export interface PersonalVaultSummary {
 @Injectable()
 export class VaultService {
   constructor(private readonly db: DbService) {}
+
+  async getVaultSummary(userId: string, vaultId: string): Promise<PersonalVaultSummary> {
+    // Check personal vault (owner_user_id = userId AND kind = 'personal' AND id = vaultId)
+    // OR shared vault where user is an active member.
+    const vaultRow = await this.db.db.execute<VaultSummaryRow>(sql`
+      SELECT v.id FROM vaults v
+      WHERE v.id = ${vaultId}
+        AND (
+          (v.owner_user_id = ${userId} AND v.kind = 'personal')
+          OR EXISTS (
+            SELECT 1 FROM vault_memberships vm
+            WHERE vm.vault_id = v.id AND vm.user_id = ${userId} AND vm.status = 'active'
+          )
+        )
+      LIMIT 1
+    `);
+    if (!vaultRow.rows[0]) {
+      throw new HttpException(
+        { error: { code: ErrorCodes.VAULT_NOT_FOUND, message: "Vault not found" } },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    const creds = await this.db.db.execute<CredentialSummaryRow>(sql`
+      SELECT id, version, updated_at
+      FROM credentials
+      WHERE vault_id = ${vaultId}
+      ORDER BY updated_at DESC
+    `);
+    return {
+      vaultId,
+      credentialIds: creds.rows.map((r) => ({
+        id: r.id,
+        version: r.version,
+        updatedAt: r.updated_at instanceof Date ? r.updated_at.toISOString() : String(r.updated_at),
+      })),
+    };
+  }
 
   async getPersonal(userId: string): Promise<PersonalVaultSummary> {
     return this.db.db.transaction(async (tx) => {

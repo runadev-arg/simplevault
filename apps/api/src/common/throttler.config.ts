@@ -166,6 +166,29 @@ export const RateLimits = {
     limit: intEnv(process.env.PAGES_SEARCH_RATE_LIMIT, 120),
     ttl: 60_000,
   },
+  // Phase 07 — vault sharing ceilings (all user-keyed via req.user.id).
+  // - `vault-sharing-create` 10/min: creating a group vault involves a DB
+  //   transaction + ownership membership insert; tight cap.
+  // - `vault-sharing-invite` 20/min: invite inserts are cheap but invite
+  //   flooding is the primary abuse vector; modest cap per user.
+  // - `vault-user-lookup` 60/min: email → public key lookups are read-only
+  //   but feed the invite flow; generous enough for UX, tight enough to cap
+  //   enumeration rate.
+  vaultSharingCreate: {
+    name: "vault-sharing-create",
+    limit: intEnv(process.env.VAULT_SHARING_CREATE_RATE_LIMIT, 10),
+    ttl: intEnv(process.env.VAULT_SHARING_CREATE_RATE_TTL, 60_000),
+  },
+  vaultSharingInvite: {
+    name: "vault-sharing-invite",
+    limit: intEnv(process.env.VAULT_SHARING_INVITE_RATE_LIMIT, 20),
+    ttl: intEnv(process.env.VAULT_SHARING_INVITE_RATE_TTL, 60_000),
+  },
+  vaultUserLookup: {
+    name: "vault-user-lookup",
+    limit: intEnv(process.env.VAULT_USER_LOOKUP_RATE_LIMIT, 60),
+    ttl: intEnv(process.env.VAULT_USER_LOOKUP_RATE_TTL, 60_000),
+  },
 } as const;
 
 /**
@@ -219,7 +242,11 @@ export class SimpleVaultThrottlerGuard extends ThrottlerGuard {
       // Phase 05 Plan 02 — pages CRUD + search ceilings (all user-keyed).
       name === "pages-write-user" ||
       name === "pages-read-user" ||
-      name === "pages-search-user";
+      name === "pages-search-user" ||
+      // Phase 07 — vault sharing ceilings (all user-keyed).
+      name === "vault-sharing-create" ||
+      name === "vault-sharing-invite" ||
+      name === "vault-user-lookup";
     if (userKeyed && typeof req.user?.id === "string") {
       tracker = `user:${req.user.id}`;
     } else if (name === "login-email") {

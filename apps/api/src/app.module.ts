@@ -18,6 +18,7 @@ import { SessionsModule } from "./sessions/sessions.module.js";
 import { TestHelpersModule } from "./test-helpers/test-helpers.module.js";
 import { TwoFaModule } from "./twofa/twofa.module.js";
 import { VaultModule } from "./vault/vault.module.js";
+import { VaultSharingModule } from "./vault-sharing/vault-sharing.module.js";
 
 /**
  * Pino redaction list — comprehensive enumeration of every sensitive field
@@ -165,6 +166,10 @@ const PINO_REDACT_PATHS = [
     // rotation + title-prefix search. Personal-vault routes only (no
     // Require2FAGuard — REQ-2FA-003 / Plan 04 precedent).
     PagesModule,
+    // Phase 07 Plan 02 — shared-vault management: create/list/invite/accept/
+    // revoke/members. Require2FAGuard is enforced at the controller level
+    // (REQ-2FA-003 — shared-vault routes require 2FA enrollment).
+    VaultSharingModule,
     // Phase 03 Plan 12 — `EXPOSE_TEST_ROUTES === "1"` exposes TestHelpersModule
     // (Cypress test seams: flip-shared-vault-stub + mutate-webauthn-counter).
     // Production builds leave the env var unset, so the conditional spread
