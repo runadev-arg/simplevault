@@ -6,3 +6,5 @@ export * from "./webauthn_challenges.js";
 export * from "./totp_credentials.js";
 export * from "./vaults.js";
 export * from "./credentials.js";
+export * from "./pages.js";
+export * from "./page_versions.js";

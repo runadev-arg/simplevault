@@ -13,6 +13,8 @@ export default {
     "./src/schema/totp_credentials.ts",
     "./src/schema/vaults.ts",
     "./src/schema/credentials.ts",
+    "./src/schema/pages.ts",
+    "./src/schema/page_versions.ts",
   ],
   out: "./drizzle",
   dialect: "postgresql",
