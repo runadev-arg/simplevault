@@ -19,6 +19,7 @@
  */
 
 import { ready } from "@simplevault/crypto/browser";
+import { type JSONContent } from "@tiptap/react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
@@ -57,7 +58,6 @@ interface HistoryPreview {
   html: string;
 }
 
-type TipTapDoc = { type: "doc"; content?: unknown[] };
 
 export default function EditPagePage(): JSX.Element {
   const router = useRouter();
@@ -69,7 +69,7 @@ export default function EditPagePage(): JSX.Element {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState("");
-  const [doc, setDoc] = useState<TipTapDoc | null>(null);
+  const [doc, setDoc] = useState<JSONContent | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [history, setHistory] = useState<PageHistoryItem[] | null>(null);
   const [preview, setPreview] = useState<HistoryPreview | null>(null);
@@ -107,8 +107,8 @@ export default function EditPagePage(): JSX.Element {
           version: blob.version,
           decrypted: plain,
         });
-        setTitle(plain.meta?.title ?? "");
-        setDoc((plain.tiptapJson as TipTapDoc | null) ?? { type: "doc" });
+        setTitle((typeof plain.meta?.title === "string" ? plain.meta.title : ""));
+        setDoc((plain.tiptapJson as JSONContent | null) ?? { type: "doc" });
       } catch (e) {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (cancelled) return;
@@ -122,7 +122,7 @@ export default function EditPagePage(): JSX.Element {
 
   const persist = async (
     base: Baseline,
-    nextDoc: TipTapDoc,
+    nextDoc: JSONContent,
     nextTitle: string,
     nextFavorite: boolean,
   ): Promise<void> => {
@@ -291,12 +291,12 @@ export default function EditPagePage(): JSX.Element {
       setSaving(true);
       await persist(
         baseline,
-        plain.tiptapJson as TipTapDoc,
-        plain.meta?.title ?? title,
+        plain.tiptapJson as JSONContent,
+        (typeof plain.meta?.title === "string" ? plain.meta.title : title),
         baseline.decrypted.isFavorite,
       );
-      setDoc(plain.tiptapJson as TipTapDoc);
-      setTitle(plain.meta?.title ?? title);
+      setDoc(plain.tiptapJson as JSONContent);
+      setTitle((typeof plain.meta?.title === "string" ? plain.meta.title : title));
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Restore failed");
     } finally {
@@ -388,7 +388,7 @@ export default function EditPagePage(): JSX.Element {
           <PageEditor
             value={doc}
             onChange={(next: unknown) => {
-              setDoc(next as TipTapDoc);
+              setDoc(next as JSONContent);
             }}
           />
         </div>
@@ -421,8 +421,8 @@ export default function EditPagePage(): JSX.Element {
                 type="button"
                 onClick={() => {
                   setBaseline(conflict.fresh);
-                  setDoc(conflict.fresh.decrypted.tiptapJson as TipTapDoc);
-                  setTitle(conflict.fresh.decrypted.meta?.title ?? "");
+                  setDoc(conflict.fresh.decrypted.tiptapJson as JSONContent);
+                  setTitle(typeof conflict.fresh.decrypted.meta?.title === "string" ? conflict.fresh.decrypted.meta.title : "");
                   setConflict(null);
                 }}
                 className="rounded-md bg-amber-100 px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-50"

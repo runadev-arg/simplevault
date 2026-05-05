@@ -1,9 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { ready } from "@simplevault/crypto/browser";
 import sodium from "libsodium-wrappers-sumo";
-import { buildVaultPageAad, ready } from "@simplevault/crypto/browser";
+import { describe, expect, it } from "vitest";
 
-import { AAD_LABEL_VAULT_PAGE } from "./aad-labels";
-import { decryptPage, encryptPage, extractTitle } from "./page-cipher";
+import {
+  decryptPage,
+  encryptPage,
+  extractTitle,
+  type DecryptedPagePlaintext,
+} from "./page-cipher";
 
 /**
  * Plan 05-03 T3 — round-trip, tamper, cross-page AAD mismatch, and
@@ -20,72 +24,82 @@ async function freshDek(): Promise<Uint8Array> {
   return sodium.randombytes_buf(32);
 }
 
-function aadFor(pageId: string, version: number): Uint8Array {
-  return buildVaultPageAad(
-    { vaultId: VAULT_ID, pageId, version, email: EMAIL },
-    AAD_LABEL_VAULT_PAGE,
-  );
-}
+const PLAIN: DecryptedPagePlaintext = {
+  tiptapJson: {
+    type: "doc",
+    content: [
+      {
+        type: "heading",
+        attrs: { level: 1 },
+        content: [{ type: "text", text: "Hello" }],
+      },
+    ],
+  },
+  isFavorite: false,
+  meta: { title: "Hello", createdAt: "2026-01-01T00:00:00.000Z" },
+};
 
 describe("page-cipher round-trip + tamper + AAD mismatch", () => {
-  it("encrypt → decrypt yields original tiptapJsonString under matching AAD", async () => {
+  it("encrypt → decrypt yields original plaintext under matching AAD", async () => {
     const dek = await freshDek();
-    const aad = aadFor(PAGE_A, 1);
-    const pt = JSON.stringify({
-      type: "doc",
-      content: [
-        {
-          type: "heading",
-          attrs: { level: 1 },
-          content: [{ type: "text", text: "Hello" }],
-        },
-      ],
+    const envelope = await encryptPage(PLAIN, dek, {
+      vaultId: VAULT_ID,
+      pageId: PAGE_A,
+      version: 1,
+      email: EMAIL,
     });
-    const { ciphertext, nonce } = await encryptPage(pt, dek, aad);
-    const out = await decryptPage(ciphertext, nonce, dek, aad);
-    expect(out).toBe(pt);
+    const out = await decryptPage(
+      { ciphertext: envelope.ciphertext, nonce: envelope.nonce, aadParamsJson: envelope.aadParamsJson },
+      dek,
+      { email: EMAIL },
+    );
+    expect(out.tiptapJson).toEqual(PLAIN.tiptapJson);
+    expect(out.isFavorite).toBe(false);
+    expect(out.meta).toEqual(PLAIN.meta);
   });
 
   it("24-byte nonce, unique across two encrypts", async () => {
     const dek = await freshDek();
-    const aad = aadFor(PAGE_A, 1);
-    const pt = '{"type":"doc","content":[]}';
-    const a = await encryptPage(pt, dek, aad);
-    const b = await encryptPage(pt, dek, aad);
+    const a = await encryptPage(PLAIN, dek, { vaultId: VAULT_ID, pageId: PAGE_A, version: 1, email: EMAIL });
+    const b = await encryptPage(PLAIN, dek, { vaultId: VAULT_ID, pageId: PAGE_A, version: 1, email: EMAIL });
     expect(a.nonce.length).toBe(24);
     expect(b.nonce.length).toBe(24);
     expect(Array.from(a.nonce)).not.toEqual(Array.from(b.nonce));
     expect(Array.from(a.ciphertext)).not.toEqual(Array.from(b.ciphertext));
   });
 
+  it("titleSearchToken is 8 bytes", async () => {
+    const dek = await freshDek();
+    const env = await encryptPage(PLAIN, dek, { vaultId: VAULT_ID, pageId: PAGE_A, version: 1, email: EMAIL });
+    expect(env.titleSearchToken.length).toBe(8);
+  });
+
   it("tampered ciphertext rejects (AEAD tag failure)", async () => {
     const dek = await freshDek();
-    const aad = aadFor(PAGE_A, 1);
-    const blob = await encryptPage('{"type":"doc"}', dek, aad);
-    const tampered = new Uint8Array(blob.ciphertext);
-    tampered[0] ^= 0x01;
+    const envelope = await encryptPage(PLAIN, dek, { vaultId: VAULT_ID, pageId: PAGE_A, version: 1, email: EMAIL });
+    const tampered = new Uint8Array(envelope.ciphertext);
+    tampered.set([0x01], 0); // flip first byte to force tag failure
     await expect(
-      decryptPage(tampered, blob.nonce, dek, aad),
+      decryptPage({ ciphertext: tampered, nonce: envelope.nonce, aadParamsJson: envelope.aadParamsJson }, dek, { email: EMAIL }),
     ).rejects.toBeTruthy();
   });
 
   it("cross-page AAD mismatch rejects (encrypt for pageA, decrypt as pageB)", async () => {
     const dek = await freshDek();
-    const aadA = aadFor(PAGE_A, 1);
-    const aadB = aadFor(PAGE_B, 1);
-    const blob = await encryptPage('{"type":"doc"}', dek, aadA);
+    const envA = await encryptPage(PLAIN, dek, { vaultId: VAULT_ID, pageId: PAGE_A, version: 1, email: EMAIL });
+    // Manually construct aadParamsJson pointing at PAGE_B
+    const wrongAadParams = JSON.stringify({ pageId: PAGE_B, vaultId: VAULT_ID, version: 1 });
     await expect(
-      decryptPage(blob.ciphertext, blob.nonce, dek, aadB),
+      decryptPage({ ciphertext: envA.ciphertext, nonce: envA.nonce, aadParamsJson: wrongAadParams }, dek, { email: EMAIL }),
     ).rejects.toBeTruthy();
   });
 
   it("wrong masterDek rejects", async () => {
     const dek = await freshDek();
     const other = await freshDek();
-    const aad = aadFor(PAGE_A, 1);
-    const blob = await encryptPage('{"type":"doc"}', dek, aad);
+    const envelope = await encryptPage(PLAIN, dek, { vaultId: VAULT_ID, pageId: PAGE_A, version: 1, email: EMAIL });
     await expect(
-      decryptPage(blob.ciphertext, blob.nonce, other, aad),
+      decryptPage({ ciphertext: envelope.ciphertext, nonce: envelope.nonce, aadParamsJson: envelope.aadParamsJson }, other, { email: EMAIL }),
     ).rejects.toBeTruthy();
   });
 });

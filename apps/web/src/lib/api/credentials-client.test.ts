@@ -1,5 +1,5 @@
 import sodium from "libsodium-wrappers-sumo";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { AuthClientError } from "./auth-client";
 import {

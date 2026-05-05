@@ -55,7 +55,7 @@ describe("credential-cipher round-trip + tamper", () => {
     const pt = '{"name":"github"}';
     const blob = await encryptCredential(pt, dek, aad);
     const tampered = new Uint8Array(blob.ciphertext);
-    tampered[0] ^= 0x01;
+    tampered.set([0x01], 0); // flip first byte to force tag failure
     await expect(
       decryptCredential({ ciphertext: tampered, nonce: blob.nonce }, dek, aad),
     ).rejects.toBeTruthy();

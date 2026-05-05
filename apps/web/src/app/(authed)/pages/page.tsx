@@ -138,7 +138,7 @@ export default function PagesListPage(): JSX.Element {
             );
             const title = extractTitle(plain.tiptapJson);
             const bodyText = extractBodyText(plain.tiptapJson);
-            const isFavorite = plain.meta?.isFavorite === true;
+            const isFavorite = plain.isFavorite;
             return {
               id: blob.id,
               title,

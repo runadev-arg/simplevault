@@ -16,6 +16,7 @@
  */
 
 import { ready } from "@simplevault/crypto/browser";
+import { type JSONContent } from "@tiptap/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
@@ -28,9 +29,7 @@ import { useAuth } from "../../../../lib/auth/auth-context";
 import { keyStore } from "../../../../lib/auth/key-store";
 import { encryptPage } from "../../../../lib/crypto/page-cipher";
 
-type TipTapDoc = { type: "doc"; content?: unknown[] };
-
-const EMPTY_DOC: TipTapDoc = { type: "doc", content: [{ type: "paragraph" }] };
+const EMPTY_DOC: JSONContent = { type: "doc", content: [{ type: "paragraph" }] };
 
 export default function NewPagePage(): JSX.Element {
   const router = useRouter();
@@ -42,7 +41,7 @@ export default function NewPagePage(): JSX.Element {
     null,
   );
   const [title, setTitle] = useState("");
-  const [doc, setDoc] = useState<TipTapDoc>(EMPTY_DOC);
+  const [doc, setDoc] = useState<JSONContent>(EMPTY_DOC);
 
   useEffect(() => {
     if (accessToken === null) return;
@@ -180,7 +179,7 @@ export default function NewPagePage(): JSX.Element {
         <PageEditor
           value={doc}
           onChange={(next: unknown) => {
-            setDoc(next as TipTapDoc);
+            setDoc(next as JSONContent);
           }}
         />
       </div>
