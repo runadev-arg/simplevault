@@ -1,7 +1,9 @@
 {
   "extends": "@simplevault/tsconfig/nextjs.json",
   "compilerOptions": {
-    "tsBuildInfoFile": "./.tsbuildinfo"
+    "tsBuildInfoFile": "./.tsbuildinfo",
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/*"] }
   },
   "include": ["next-env.d.ts", "src/**/*", ".next/types/**/*.ts"],
   "exclude": ["node_modules", ".next", ".turbo"]
