@@ -14,6 +14,13 @@ import sodium from "libsodium-wrappers-sumo";
 
 import type { SignupEnvelope } from "../api/auth-client";
 
+import {
+  AAD_LABEL_KX_SK,
+  AAD_LABEL_MASTER,
+  AAD_LABEL_RECOVERY,
+  AAD_LABEL_SIGN_SK,
+} from "./aad-labels";
+
 /**
  * Build the POST /auth/signup request envelope (the "frozen" 10-field
  * shape from 02-07 SUMMARY).
@@ -39,11 +46,12 @@ import type { SignupEnvelope } from "../api/auth-client";
  *       — same contract as a rotated user_id would imply. Documented for
  *       Phase 04+ to honour.
  *
- *   Per-blob AAD label prefixes (from CRYPTO-STACK.md / 02-04 hand-off):
- *     - master_dek           : "sv:user-master:v1|"     + emailHash
- *     - master_dek_recovery  : "sv:user-recovery:v1|"   + emailHash
- *     - user_signing_sk      : "sv:user-sign-sk:v1|"    + emailHash
- *     - user_kx_sk           : "sv:user-kx-sk:v1|"      + emailHash
+ *   Per-blob AAD label prefixes (imported from `./aad-labels`; literals
+ *   live ONLY in `aad-labels.ts` — FINDING-0026 closure):
+ *     - master_dek           : AAD_LABEL_MASTER     + emailHash
+ *     - master_dek_recovery  : AAD_LABEL_RECOVERY   + emailHash
+ *     - user_signing_sk      : AAD_LABEL_SIGN_SK    + emailHash
+ *     - user_kx_sk           : AAD_LABEL_KX_SK      + emailHash
  *
  *   recovery_KEK derivation also takes `userId` as HKDF salt; we re-use
  *   the same emailHash for that role (consistent per-user binder across
@@ -149,22 +157,22 @@ export async function buildSignupEnvelope(
   const wrappedMasterDek = await wrapKey(
     masterDek,
     masterKek,
-    aadFor("sv:user-master:v1|", input.argon2Params, h),
+    aadFor(AAD_LABEL_MASTER, input.argon2Params, h),
   );
   const wrappedMasterDekRecovery = await wrapKey(
     masterDek,
     recoveryKek,
-    aadFor("sv:user-recovery:v1|", input.argon2Params, h),
+    aadFor(AAD_LABEL_RECOVERY, input.argon2Params, h),
   );
   const wrappedUserSigningSk = await wrapKey(
     sign.secretKey,
     masterKek,
-    aadFor("sv:user-sign-sk:v1|", input.argon2Params, h),
+    aadFor(AAD_LABEL_SIGN_SK, input.argon2Params, h),
   );
   const wrappedUserKxSk = await wrapKey(
     kx.secretKey,
     masterKek,
-    aadFor("sv:user-kx-sk:v1|", input.argon2Params, h),
+    aadFor(AAD_LABEL_KX_SK, input.argon2Params, h),
   );
 
   // 7. argon2_secret_key_hash = Argon2id(secret_key, server_argon_salt, params)

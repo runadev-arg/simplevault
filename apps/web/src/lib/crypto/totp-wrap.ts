@@ -12,7 +12,8 @@ import { AAD_LABEL_TOTP } from "./aad-labels";
  * Phase 03 Plan 10 — TOTP-secret wrap/unwrap helpers.
  *
  * The TOTP secret (RFC 6238, 20 bytes) is wrapped under `master_DEK` with
- * AAD `encodeAad(argon2Params, "sv:user-totp:v1|" || SHA256(lower(email)))`.
+ * AAD `encodeAad(argon2Params, AAD_LABEL_TOTP || SHA256(lower(email)))`
+ * (label literal lives ONLY in `./aad-labels` — FINDING-0026 closure).
  * The on-the-wire shape matches the existing `wrappedMasterDek` etc.
  * pattern — `nonce || ciphertext` packed as a single base64 string. The
  * AAD bytes themselves are also base64-encoded and round-tripped through

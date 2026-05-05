@@ -13,6 +13,7 @@ import {
   verifyTotp,
   type WebauthnFinishAuthResponse,
 } from "../api/twofa-client";
+import { AAD_LABEL_MASTER } from "../crypto/aad-labels";
 import { unlockSecrets } from "../crypto/login-derivations";
 import { unwrapTotpSecret } from "../crypto/totp-wrap";
 
@@ -121,9 +122,10 @@ export async function findTotpMatch(
   const emailHash = sodium.crypto_hash_sha256(
     enc.encode(email.toLowerCase()),
   );
-  const masterAadCtx = new Uint8Array("sv:user-master:v1|".length + emailHash.length);
-  masterAadCtx.set(enc.encode("sv:user-master:v1|"), 0);
-  masterAadCtx.set(emailHash, "sv:user-master:v1|".length);
+  const masterLabelBytes = enc.encode(AAD_LABEL_MASTER);
+  const masterAadCtx = new Uint8Array(masterLabelBytes.length + emailHash.length);
+  masterAadCtx.set(masterLabelBytes, 0);
+  masterAadCtx.set(emailHash, masterLabelBytes.length);
   const masterAad = encodeAad(material.argon2Params, masterAadCtx);
   const wrappedMasterDek = sodium.from_base64(
     material.wrappedMasterDek,

@@ -41,7 +41,7 @@ type Phase =
  *   4. Client runs `verifyTotpCandidate(secret, code, currentStep, drift=1)`
  *      locally — RFC 6238 SHA-1 / 30s. Server NEVER sees the secret OR
  *      the code (Plan 03 Key Link 3).
- *   5. On match: wrap secret under master_DEK + AAD `sv:user-totp:v1|`
+ *   5. On match: wrap secret under master_DEK + AAD AAD_LABEL_TOTP
  *      and POST /2fa/totp/finish-register.
  *   6. Always best-effort zero the in-memory secret on transition.
  *

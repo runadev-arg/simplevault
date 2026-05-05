@@ -17,7 +17,7 @@ import { request } from "./auth-client";
  * SECURITY (INDEX Key Link 3 — repeated here because it's load-bearing):
  * the TOTP secret is browser-only. The server NEVER sees plaintext. The
  * client encrypts the secret under master_DEK with AAD label
- * `sv:user-totp:v1|<emailHash>` and posts the wrapped blob in
+ * AAD_LABEL_TOTP || emailHash (see ./aad-labels) and posts the wrapped blob in
  * `finishTotpRegister`; the server stores the blob opaquely. Same for
  * decrypt: `verifyTotp` decrypts client-side, runs RFC 6238 locally, and
  * posts only the verified `candidateStep`.
@@ -185,7 +185,7 @@ export interface TotpFinishRegisterRequest {
   wrappedSecret: string;
   /**
    * Base64 of the AAD bytes used at wrap time: `encodeAad(argon2Params,
-   * "sv:user-totp:v1|" || SHA256(lower(email)))`. The client recomputes
+   * AAD_LABEL_TOTP || SHA256(lower(email)))`. The client recomputes
    * this at decrypt time too, but storing it server-side lets the server
    * round-trip the bytes without re-deriving them (defence in depth: any
    * mid-stream AAD substitution surfaces as a tag-mismatch on decrypt).
