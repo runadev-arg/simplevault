@@ -22,6 +22,13 @@
       "when": 1777820403301,
       "tag": "0002_phase03_2fa_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777943048597,
+      "tag": "0003_phase04_vaults_credentials",
+      "breakpoints": true
     }
   ]
 }

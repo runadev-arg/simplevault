@@ -11,6 +11,8 @@ export default {
     "./src/schema/webauthn_credentials.ts",
     "./src/schema/webauthn_challenges.ts",
     "./src/schema/totp_credentials.ts",
+    "./src/schema/vaults.ts",
+    "./src/schema/credentials.ts",
   ],
   out: "./drizzle",
   dialect: "postgresql",
