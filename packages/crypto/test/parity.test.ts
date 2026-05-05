@@ -53,6 +53,8 @@ const SHARED_EXPECTED = [
 // node.ts header).
 const BROWSER_ONLY_EXPECTED = [
   "buildOtpauthUrl",
+  "buildVaultCredentialAad",
+  "canonicalCredentialAadJson",
   "computeRecoveryLookupHash",
   "computeTotpStep",
   "deriveMasterKek",
