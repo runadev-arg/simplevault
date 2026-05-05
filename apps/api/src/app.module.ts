@@ -15,7 +15,6 @@ import { RedisModule } from "./redis/redis.module.js";
 import { SessionsModule } from "./sessions/sessions.module.js";
 import { TestHelpersModule } from "./test-helpers/test-helpers.module.js";
 import { TwoFaModule } from "./twofa/twofa.module.js";
-import { VaultProbeModule } from "./vault/vault-probe.module.js";
 
 /**
  * Pino redaction list — comprehensive enumeration of every sensitive field
@@ -149,18 +148,17 @@ const PINO_REDACT_PATHS = [
     // revoke-all). Distinct from `auth/sessions/SessionService` which is the
     // refresh-rotation primitive; this module is the controller surface.
     SessionsModule,
-    // Phase 03 Plan 07 — gated probe route for the Require2FAGuard.
-    // INDEX Key Link 8: registered IFF EXPOSE_TEST_ROUTES === "1". Production
-    // builds leave this unset → VaultProbeModule is not imported → the
-    // `POST /vault/_2fa-guard-probe` route is absent from the router. Phase 07
-    // deletes both this conditional spread and the module as its first commit.
+    // Phase 03 Plan 12 — `EXPOSE_TEST_ROUTES === "1"` exposes TestHelpersModule
+    // (Cypress test seams: flip-shared-vault-stub + mutate-webauthn-counter).
+    // Production builds leave the env var unset, so the conditional spread
+    // resolves to `[]` and none of these helper routes is registered.
     //
-    // Phase 03 Plan 12 — same gate exposes TestHelpersModule (Cypress
-    // test seams: flip-shared-vault-stub + mutate-webauthn-counter).
-    // Same production-safety story; the runbook documents grep + Dokploy
-    // panel checks the operator runs before deploy.
+    // Phase 04 Plan 01 — the Phase-03 stub probe controller + its module
+    // were retired here. The Require2FAGuard itself (apps/api/src/twofa/
+    // require-2fa.guard.ts) is preserved unchanged for Phase 07 reuse on
+    // `/shared-vaults/*`.
     ...(process.env.EXPOSE_TEST_ROUTES === "1"
-      ? [VaultProbeModule, TestHelpersModule]
+      ? [TestHelpersModule]
       : []),
   ],
   // ORDER IS LOAD-BEARING. APP_GUARDs run in registration order; the next

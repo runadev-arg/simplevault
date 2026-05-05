@@ -79,9 +79,11 @@ export class DbBackedRequire2FACountReader implements Require2FACountReader {
  * `Require2FAGuard` — Phase 03 INDEX Truth 15 + Key Link 8.
  *
  * Asserts the request's authenticated user has ≥1 active 2FA method (webauthn
- * or totp). Used by the future `vault.create` / `vault.join` routes (Phase 07)
- * AND by the gated probe route `POST /vault/_2fa-guard-probe` shipped in this
- * plan (Plan 07) for E2E coverage.
+ * or totp). Reserved for the future `vault.create` / `vault.join` routes
+ * (Phase 07 — `/shared-vaults/*`). The Phase-03 stub probe route under
+ * `/vault/...` was retired in Plan 04-01 once the real personal-vault routes
+ * became imminent; this guard implementation stays put for that Phase-07
+ * reuse.
  *
  * MUST be stacked AFTER `JwtAuthGuard` so `req.user.id` is populated. If the
  * principal is missing the guard fails closed with 401 (defence-in-depth —
