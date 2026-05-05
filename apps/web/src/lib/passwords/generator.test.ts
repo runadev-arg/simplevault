@@ -8,11 +8,14 @@ import { EFF_LARGE } from "./eff-large";
 import { generatePassword, generatePassphrase } from "./generator";
 
 /**
- * Pinned SHA-256 of `EFF_LARGE.join("\n")` (with a trailing newline appended
- * to match the upstream raw file's terminating newline). T3 fills the real
- * value; T1 leaves it empty so the integrity test fails RED.
+ * Pinned SHA-256 of `EFF_LARGE.join("\n") + "\n"` (with the trailing newline
+ * appended to match the upstream raw file's terminating newline). Computed
+ * locally in T3 from the upstream EFF large list (raw-file SHA-256
+ * `addd35536511597a02fa0a9ff1e5284677b8883b83e986e43f15a3db996b903e`,
+ * documented in `eff-large.ts`).
  */
-const EXPECTED_EFF_JOIN_HASH = "";
+const EXPECTED_EFF_JOIN_HASH =
+  "6d557f0693958fb5e650b68b5bee585eb82cf4da32965505c789e924743bc522";
 
 function sha256Hex(s: string): string {
   return createHash("sha256").update(s, "utf8").digest("hex");
