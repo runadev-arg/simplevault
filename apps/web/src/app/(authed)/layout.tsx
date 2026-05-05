@@ -4,6 +4,7 @@ import type { JSX, ReactNode } from "react";
 import { useEffect } from "react";
 
 import { AuthProvider, useAuth } from "../../lib/auth/auth-context";
+import { useAutoLock } from "../../lib/auth/use-auto-lock";
 
 /**
  * (authed) route group — client-side guard.
@@ -23,6 +24,13 @@ import { AuthProvider, useAuth } from "../../lib/auth/auth-context";
 
 function AuthGate({ children }: { children: ReactNode }): JSX.Element {
   const { accessToken, bootstrapped } = useAuth();
+
+  // Plan 04-08 — 15-min idle auto-lock. Mounted at the (authed) tree
+  // root; the hook itself short-circuits on SSR (no `document`). We
+  // mount it unconditionally inside `AuthGate` so the timer is armed
+  // the moment the bootstrap splash renders — there is no harm if the
+  // user is mid-bootstrap, since `keyStore.wipe()` is idempotent.
+  useAutoLock();
 
   useEffect(() => {
     if (bootstrapped && accessToken === null) {

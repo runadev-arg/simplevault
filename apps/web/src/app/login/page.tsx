@@ -49,6 +49,10 @@ function LoginPageInner(): JSX.Element {
   const searchParams = useSearchParams();
   const router = useRouter();
   const justSignedUp = searchParams.get("signed_up") === "1";
+  // Plan 04-08 — when the (authed) auto-lock fires, it routes here with
+  // `?reason=auto_lock`. Banner explains "you weren't logged out, your
+  // local key material was wiped after 15 min idle; re-enter creds".
+  const autoLocked = searchParams.get("reason") === "auto_lock";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -274,6 +278,17 @@ function LoginPageInner(): JSX.Element {
             </p>
           )}
         </header>
+
+        {autoLocked && (
+          <div
+            role="alert"
+            data-testid="auto-lock-banner"
+            className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+          >
+            You were locked due to 15 minutes of inactivity. Please re-enter
+            your master password and secret key.
+          </div>
+        )}
 
         <form onSubmit={(e) => { void onSubmit(e); }} className="space-y-4" autoComplete="off">
           <div className="space-y-1">
