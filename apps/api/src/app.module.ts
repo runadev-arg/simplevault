@@ -15,6 +15,7 @@ import { RedisModule } from "./redis/redis.module.js";
 import { SessionsModule } from "./sessions/sessions.module.js";
 import { TestHelpersModule } from "./test-helpers/test-helpers.module.js";
 import { TwoFaModule } from "./twofa/twofa.module.js";
+import { VaultModule } from "./vault/vault.module.js";
 
 /**
  * Pino redaction list — comprehensive enumeration of every sensitive field
@@ -148,6 +149,11 @@ const PINO_REDACT_PATHS = [
     // revoke-all). Distinct from `auth/sessions/SessionService` which is the
     // refresh-rotation primitive; this module is the controller surface.
     SessionsModule,
+    // Phase 04 Plan 03 — `GET /vault/personal` (metadata-only summary list of
+    // personal-vault credentials). Plan 04-02 (sibling Wave-2) lands the
+    // `/credentials/*` CRUD on the same vaultId; the web client fans out one
+    // `GET /credentials/:id` per visible card (Plan 04-09 lazy-load).
+    VaultModule,
     // Phase 03 Plan 12 — `EXPOSE_TEST_ROUTES === "1"` exposes TestHelpersModule
     // (Cypress test seams: flip-shared-vault-stub + mutate-webauthn-counter).
     // Production builds leave the env var unset, so the conditional spread
