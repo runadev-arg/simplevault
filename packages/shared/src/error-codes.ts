@@ -32,6 +32,21 @@ export const ErrorCodes = {
   VAULT_QUOTA_EXCEEDED: "E2003",
   VAULT_INVITE_EXPIRED: "E2004",
   VAULT_DELETE_VOTE_DEADLOCK: "E2005",
+  // Phase 04 Plan 02 — credentials CRUD + atomic CAS PATCH (Key Link 2 of
+  // 04-INDEX). `CREDENTIAL_NOT_FOUND` is the uniform-404 anti-enumeration
+  // surface for cross-user / non-existent GET/PATCH/DELETE (Truth 3); the
+  // plan specifies "E2001" but that slot is already taken by
+  // `VAULT_NOT_FOUND` from Phase 04 Plan 01, so we allocate the next free
+  // E2xxx slots — a Rule-2 adaptation that preserves the semantic intent
+  // (next free in the vault range) without colliding with prior allocations.
+  CREDENTIAL_NOT_FOUND: "E2006",
+  CREDENTIAL_VERSION_CONFLICT: "E2007",
+  // Phase 04 Plan 03 — body-size cap on /credentials/* (FINDING-0015 partial).
+  // Express body-parser fires 413 BEFORE Zod runs; AllExceptionsFilter maps
+  // PayloadTooLargeError → this code. Plan specified "E2003" but that slot
+  // is taken by VAULT_QUOTA_EXCEEDED from a prior phase; next-free E2xxx
+  // (Rule-2 adaptation, same as the sibling 04-02 allocation note above).
+  CREDENTIAL_BODY_TOO_LARGE: "E2008",
 
   // Crypto (E3xxx)
   CRYPTO_DECRYPT_FAILED: "E3001",
