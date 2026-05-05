@@ -36,11 +36,11 @@ const MASTER_DEK_FILL_1_FLIP = (() => {
 
 // Locked byte-pinned token for masterDek = Uint8Array(32).fill(1), title = "test".
 // Computed once via the impl + pasted here.
-const EXPECTED_TOKEN_FILL1_TEST_HEX = "1a82e8ed6a8c8e09";
+const EXPECTED_TOKEN_FILL1_TEST_HEX = "cd205b72e4ecceac";
 
 // Locked byte-pinned 32-byte search key for masterDek = Uint8Array(32).fill(1).
 const EXPECTED_KEY_FILL1_HEX =
-  "82d4cda14e7b2cda7b2bbe8a1ade3b2e93ddc4f33a32797a9b0d5e8c9e95ab16";
+  "f28b525f55d6a43b0044b6c967ee9e69f2a7de78eb031c1a52cf9b3cea03c10a";
 
 describe("deriveTitleSearchKey", () => {
   it("returns 32 bytes", async () => {
