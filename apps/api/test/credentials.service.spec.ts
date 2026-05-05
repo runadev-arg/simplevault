@@ -239,29 +239,33 @@ function compileSql(sqlObj: unknown): { text: string; params: unknown[] } {
   const text: string[] = [];
   const params: unknown[] = [];
   for (const chunk of chunks) {
-    if (typeof chunk === "string") {
-      text.push(chunk);
+    // StringChunk: { value: string[] } — pure SQL fragment.
+    if (
+      chunk &&
+      typeof chunk === "object" &&
+      "value" in chunk &&
+      Array.isArray((chunk as { value: unknown }).value) &&
+      ((chunk as { value: unknown[] }).value).every((s) => typeof s === "string")
+    ) {
+      text.push(((chunk as { value: string[] }).value).join(""));
       continue;
     }
-    if (chunk && typeof chunk === "object") {
-      // StringChunk: { value: string[] }
-      if ("value" in chunk && Array.isArray((chunk as { value: unknown }).value)) {
-        text.push(((chunk as { value: string[] }).value).join(""));
-        continue;
-      }
-      // Param: { value, encoder }
-      if ("value" in chunk && "encoder" in chunk) {
-        params.push((chunk as { value: unknown }).value);
-        text.push("?");
-        continue;
-      }
-      // Plain {value}
-      if ("value" in chunk) {
-        params.push((chunk as { value: unknown }).value);
-        text.push("?");
-        continue;
-      }
+    // Param wrapper: { value, encoder } — substituted value w/ encoder.
+    if (
+      chunk &&
+      typeof chunk === "object" &&
+      "value" in chunk &&
+      "encoder" in chunk
+    ) {
+      params.push((chunk as { value: unknown }).value);
+      text.push("?");
+      continue;
     }
+    // Anything else (raw string / Uint8Array / number / null) is a
+    // direct interpolated param. Drizzle inlines primitive values when
+    // the encoder isn't bound at template-build time.
+    params.push(chunk);
+    text.push("?");
   }
   return { text: text.join(""), params };
 }

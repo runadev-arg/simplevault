@@ -2,6 +2,7 @@ import { Controller, Get, Req, UseGuards } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 
 import { JwtAuthGuard, type AuthedRequest } from "../auth/jwt/jwt-auth.guard.js";
+import { RateLimits } from "../common/throttler.config.js";
 
 import { VaultService, type PersonalVaultSummary } from "./vault.service.js";
 
@@ -29,7 +30,12 @@ export class VaultController {
   constructor(private readonly svc: VaultService) {}
 
   @Get("personal")
-  @Throttle({ "vault-list-user": { limit: 120, ttl: 60_000 } })
+  @Throttle({
+    [RateLimits.vaultListUser.name]: {
+      limit: RateLimits.vaultListUser.limit,
+      ttl: RateLimits.vaultListUser.ttl,
+    },
+  })
   async getPersonal(@Req() req: AuthedRequest): Promise<PersonalVaultSummary> {
     return this.svc.getPersonal(req.user.id);
   }

@@ -108,6 +108,36 @@ export const RateLimits = {
     limit: intEnv(process.env.TWOFA_METHODS_DELETE_RATE_LIMIT, 30),
     ttl: 60_000,
   },
+  // Phase 04 Plan 03 — credentials + vault-list ceilings. All user-keyed via
+  // `req.user.id` (post-FINDING-0021 closure: APP_GUARD ordering in app.module
+  // populates req.user before this guard runs). Names are referenced by
+  // sibling Plan 04-02's `@Throttle({...})` decorators and by Plan 04-03's
+  // VaultController — verify-grep at end-of-wave confirms exact matches.
+  // Rationale:
+  // - `credentials-write-user` 60/min: write-burst cap (REQ-RATELIMIT spirit).
+  //   POST /credentials + PATCH /credentials/:id + DELETE /credentials/:id
+  //   share this ceiling so a runaway client can't hammer all three at once.
+  // - `credentials-read-user` 300/min: matches REQ-RATELIMIT-006 (vault-read
+  //   user). Reads are cheap (one PK lookup) but still capped to bound the
+  //   per-user request budget.
+  // - `vault-list-user` 120/min: GET /vault/personal — list-page-load cap.
+  //   Generous because the endpoint is a single SELECT + summary mapping;
+  //   amplification is bounded by N credentials (≤low-thousands at v1 scale).
+  credentialsWriteUser: {
+    name: "credentials-write-user",
+    limit: intEnv(process.env.CREDENTIALS_WRITE_RATE_LIMIT, 60),
+    ttl: 60_000,
+  },
+  credentialsReadUser: {
+    name: "credentials-read-user",
+    limit: intEnv(process.env.CREDENTIALS_READ_RATE_LIMIT, 300),
+    ttl: 60_000,
+  },
+  vaultListUser: {
+    name: "vault-list-user",
+    limit: intEnv(process.env.VAULT_LIST_RATE_LIMIT, 120),
+    ttl: 60_000,
+  },
 } as const;
 
 /**
@@ -153,7 +183,11 @@ export class SimpleVaultThrottlerGuard extends ThrottlerGuard {
       name === "sessions-revoke-user" ||
       name === "sessions-revoke-all-user" ||
       name === "2fa-methods-list-user" ||
-      name === "2fa-methods-delete-user";
+      name === "2fa-methods-delete-user" ||
+      // Phase 04 Plan 03 — credentials + vault-list ceilings (all user-keyed).
+      name === "credentials-write-user" ||
+      name === "credentials-read-user" ||
+      name === "vault-list-user";
     if (userKeyed && typeof req.user?.id === "string") {
       tracker = `user:${req.user.id}`;
     } else if (name === "login-email") {
