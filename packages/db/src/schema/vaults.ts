@@ -26,6 +26,8 @@ export const vaults = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     kind: text("kind").notNull().default("personal"),
+    /** Display name — null for personal vaults; required for shared vaults. */
+    name: text("name"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

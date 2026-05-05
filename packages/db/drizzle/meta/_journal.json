@@ -36,6 +36,13 @@
       "when": 1778001538029,
       "tag": "0004_phase05_pages_and_versions",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778018739970,
+      "tag": "0005_phase07_shared_vaults",
+      "breakpoints": true
     }
   ]
 }

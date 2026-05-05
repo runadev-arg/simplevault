@@ -12,6 +12,7 @@ export default {
     "./src/schema/webauthn_challenges.ts",
     "./src/schema/totp_credentials.ts",
     "./src/schema/vaults.ts",
+    "./src/schema/vault_memberships.ts",
     "./src/schema/credentials.ts",
     "./src/schema/pages.ts",
     "./src/schema/page_versions.ts",
