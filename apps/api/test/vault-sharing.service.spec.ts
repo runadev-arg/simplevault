@@ -279,29 +279,23 @@ describe("VaultSharingService (Plan 07-02)", () => {
   // ────────── (5) removeMember — throws 409 when removing last owner
 
   it("(5) removeMember — throws 409 when removing last owner", async () => {
-    let callCount = 0;
+    // USER_A removing themselves (self-removal path) — they're the last active owner.
     kit.fake.handlers.push((norm, _params) => {
-      if (norm.includes("select id from vault_memberships")) {
-        callCount++;
-        if (callCount === 1) {
-          // Self-removal check: not same user, so this is the owner check
-          // Actually USER_A removing USER_A — self removal case
-          // We need to set it up so requesterId === targetUserId for last-owner test
-          return { rows: [{ id: "mem-id" }], rowCount: 1 };
-        }
+      // Self-removal requester-access check (no role filter, no FOR UPDATE)
+      if (norm.includes("select id from vault_memberships") && !norm.includes("for update")) {
+        return { rows: [{ id: "mem-id" }], rowCount: 1 };
       }
-      if (norm.includes("select id, role, status from vault_memberships")) {
-        // Target IS an owner
-        return { rows: [{ id: "mem-id", role: "owner", status: "active" }], rowCount: 1 };
+      // Target lock: SELECT id, role ... FOR UPDATE
+      if (norm.includes("select id, role from vault_memberships") && norm.includes("for update")) {
+        return { rows: [{ id: "mem-id", role: "owner" }], rowCount: 1 };
       }
+      // Owner count check (also FOR UPDATE)
       if (norm.includes("select count(*)::int as n")) {
-        // Only 1 active owner
         return { rows: [{ n: 1 }], rowCount: 1 };
       }
       return undefined as unknown as ExecResult;
     });
 
-    // USER_A removing themselves (self-removal path) — they're the last owner
     await expect(kit.svc.removeMember(USER_A, VAULT_ID, USER_A)).rejects.toMatchObject({
       status: 409,
     });
@@ -309,14 +303,13 @@ describe("VaultSharingService (Plan 07-02)", () => {
 
   it("(5b) removeMember — non-owner trying to remove another user → 403", async () => {
     kit.fake.handlers.push((norm, _params) => {
-      if (norm.includes("select id from vault_memberships")) {
-        // Requester is NOT an owner
+      // Owner check: includes "role = 'owner'" in WHERE; returns empty → not owner
+      if (norm.includes("select id from vault_memberships") && norm.includes("role = 'owner'")) {
         return { rows: [], rowCount: 0 };
       }
       return undefined as unknown as ExecResult;
     });
 
-    // USER_A (not an owner) tries to remove USER_B
     await expect(kit.svc.removeMember(USER_A, VAULT_ID, USER_B)).rejects.toMatchObject({
       status: 403,
       response: { error: { code: "E2015" } },
@@ -326,17 +319,17 @@ describe("VaultSharingService (Plan 07-02)", () => {
   it("(5c) removeMember — owner can remove a member (non-owner target)", async () => {
     let deleteCount = 0;
     kit.fake.handlers.push((norm, _params) => {
-      if (norm.includes("select id from vault_memberships")) {
-        // Requester is an owner
+      // Owner check: includes "role = 'owner'" in WHERE, no FOR UPDATE
+      if (norm.includes("select id from vault_memberships") && norm.includes("role = 'owner'") && !norm.includes("for update")) {
         return { rows: [{ id: "owner-mem-id" }], rowCount: 1 };
       }
-      if (norm.includes("select id, role, status from vault_memberships")) {
-        // Target is a regular member, not an owner
-        return { rows: [{ id: "target-mem-id", role: "member", status: "active" }], rowCount: 1 };
+      // Target lock: SELECT id, role ... FOR UPDATE (target is a non-owner member)
+      if (norm.includes("select id, role from vault_memberships") && norm.includes("for update")) {
+        return { rows: [{ id: "target-mem-id", role: "member" }], rowCount: 1 };
       }
       if (norm.startsWith("delete from vault_memberships")) {
         deleteCount++;
-        return { rows: [{ id: "target-mem-id" }], rowCount: 1 };
+        return { rows: [], rowCount: 1 };
       }
       return undefined as unknown as ExecResult;
     });

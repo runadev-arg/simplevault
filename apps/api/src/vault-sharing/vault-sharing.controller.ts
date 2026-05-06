@@ -113,9 +113,10 @@ export class VaultSharingController {
     @Req() req: AuthedRequest,
     @Query("email") email: string,
   ): Promise<{ id: string; kxPublicKey: string }> {
-    if (!email || typeof email !== "string") {
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || typeof email !== "string" || email.length > 254 || !EMAIL_RE.test(email)) {
       throw new BadRequestException({
-        error: { code: ErrorCodes.VALIDATION_FAILED, message: "email query parameter is required" },
+        error: { code: ErrorCodes.VALIDATION_FAILED, message: "valid email query parameter is required" },
       });
     }
     return this.svc.lookupUser(req.user.id, email);
@@ -155,9 +156,21 @@ export class VaultSharingController {
     const b = body as Record<string, unknown> | null | undefined;
     const inviteeId = typeof b?.inviteeId === "string" ? b.inviteeId : null;
     const wrappedVaultKey = typeof b?.wrappedVaultKey === "string" ? b.wrappedVaultKey : null;
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!inviteeId || !wrappedVaultKey) {
       throw new BadRequestException({
         error: { code: ErrorCodes.VALIDATION_FAILED, message: "inviteeId and wrappedVaultKey are required" },
+      });
+    }
+    if (!UUID_RE.test(inviteeId)) {
+      throw new BadRequestException({
+        error: { code: ErrorCodes.VALIDATION_FAILED, message: "inviteeId must be a valid UUID" },
+      });
+    }
+    // Sealed-box wrappedVaultKey is 80 bytes → 107 base64url chars; cap at 256.
+    if (wrappedVaultKey.length > 256) {
+      throw new BadRequestException({
+        error: { code: ErrorCodes.VALIDATION_FAILED, message: "wrappedVaultKey exceeds maximum length" },
       });
     }
     await this.svc.createInvite(req.user.id, id, inviteeId, wrappedVaultKey);

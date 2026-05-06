@@ -121,7 +121,14 @@ export class CredentialsService {
              ${dto.nonce},
              ${dto.aadParamsJson}
       FROM vaults v
-      WHERE v.id = ${dto.vaultId} AND v.owner_user_id = ${userId}
+      WHERE v.id = ${dto.vaultId}
+        AND (
+          v.owner_user_id = ${userId}
+          OR EXISTS (
+            SELECT 1 FROM vault_memberships vm
+            WHERE vm.vault_id = v.id AND vm.user_id = ${userId} AND vm.status = 'active'
+          )
+        )
       RETURNING id, vault_id, version, ciphertext, nonce, aad_params_json, updated_at
     `);
     if (r.rows.length === 0) throw notFound();
@@ -136,7 +143,14 @@ export class CredentialsService {
     const r = await this.dbSvc.db.execute<CredentialRow>(sql`
       SELECT c.id, c.vault_id, c.version, c.ciphertext, c.nonce, c.aad_params_json, c.updated_at
       FROM credentials c JOIN vaults v ON v.id = c.vault_id
-      WHERE c.id = ${id} AND v.owner_user_id = ${userId}
+      WHERE c.id = ${id}
+        AND (
+          v.owner_user_id = ${userId}
+          OR EXISTS (
+            SELECT 1 FROM vault_memberships vm
+            WHERE vm.vault_id = v.id AND vm.user_id = ${userId} AND vm.status = 'active'
+          )
+        )
     `);
     if (r.rows.length === 0) throw notFound();
     return shape(r.rows[0] as CredentialRow, true);
@@ -164,15 +178,26 @@ export class CredentialsService {
       WHERE c.id = ${id}
         AND v.id = c.vault_id
         AND c.version = ${dto.version}
-        AND v.owner_user_id = ${userId}
+        AND (
+          v.owner_user_id = ${userId}
+          OR EXISTS (
+            SELECT 1 FROM vault_memberships vm
+            WHERE vm.vault_id = v.id AND vm.user_id = ${userId} AND vm.status = 'active'
+          )
+        )
       RETURNING c.id, c.vault_id, c.version, c.ciphertext, c.nonce, c.aad_params_json, c.updated_at
     `);
     if (r.rows.length === 0) {
-      // 404 vs 409 disambiguation. The follow-up SELECT itself joins on
-      // owner_user_id, so it cannot leak existence cross-user.
       const exists = await this.dbSvc.db.execute<{ id: string }>(sql`
         SELECT c.id FROM credentials c JOIN vaults v ON v.id = c.vault_id
-        WHERE c.id = ${id} AND v.owner_user_id = ${userId}
+        WHERE c.id = ${id}
+          AND (
+            v.owner_user_id = ${userId}
+            OR EXISTS (
+              SELECT 1 FROM vault_memberships vm
+              WHERE vm.vault_id = v.id AND vm.user_id = ${userId} AND vm.status = 'active'
+            )
+          )
       `);
       throw exists.rows.length === 0 ? notFound() : versionConflict();
     }
@@ -186,7 +211,15 @@ export class CredentialsService {
   async delete(userId: string, id: string): Promise<void> {
     const r = await this.dbSvc.db.execute<{ id: string }>(sql`
       DELETE FROM credentials c USING vaults v
-      WHERE c.id = ${id} AND v.id = c.vault_id AND v.owner_user_id = ${userId}
+      WHERE c.id = ${id}
+        AND v.id = c.vault_id
+        AND (
+          v.owner_user_id = ${userId}
+          OR EXISTS (
+            SELECT 1 FROM vault_memberships vm
+            WHERE vm.vault_id = v.id AND vm.user_id = ${userId} AND vm.status = 'active'
+          )
+        )
       RETURNING c.id
     `);
     if (r.rows.length === 0) throw notFound();

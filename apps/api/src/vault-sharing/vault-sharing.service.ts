@@ -54,18 +54,6 @@ interface VaultRow {
   [k: string]: unknown;
 }
 
-interface MembershipRow {
-  id: string;
-  vault_id: string;
-  user_id: string;
-  role: string;
-  status: string;
-  wrapped_vault_key: Buffer;
-  invited_by: string | null;
-  created_at: Date | string;
-  [k: string]: unknown;
-}
-
 interface VaultWithMembershipRow {
   vault_id: string;
   vault_name: string | null;
@@ -394,76 +382,85 @@ export class VaultSharingService {
    * - Self-removal: only needs to be an active member.
    * - Remove others: requester must be an active owner.
    * - Last-owner guard: cannot remove the last active owner.
+   *
+   * The access check, last-owner guard, and DELETE all run inside one
+   * transaction. The `SELECT ... FOR UPDATE` on the target row prevents a
+   * TOCTOU race between the owner-count check and the DELETE (FINDING-0060).
    */
   async removeMember(
     requesterId: string,
     vaultId: string,
     targetUserId: string,
   ): Promise<void> {
-    if (requesterId === targetUserId) {
-      // Self-removal: just needs to be an active member
-      const access = await this.db.db.execute<{ id: string }>(sql`
-        SELECT id FROM vault_memberships
-        WHERE vault_id = ${vaultId} AND user_id = ${requesterId} AND status = 'active'
+    type Tx = { execute: <T>(s: unknown) => Promise<{ rows: T[] }> };
+    const db = this.db.db as unknown as { transaction: <T>(cb: (tx: Tx) => Promise<T>) => Promise<T> };
+
+    await db.transaction(async (tx) => {
+      // Verify requester has permission
+      if (requesterId === targetUserId) {
+        const access = await tx.execute<{ id: string }>(sql`
+          SELECT id FROM vault_memberships
+          WHERE vault_id = ${vaultId} AND user_id = ${requesterId} AND status = 'active'
+          LIMIT 1
+        `);
+        if (!access.rows[0]) {
+          throw new HttpException(
+            { error: { code: ErrorCodes.VAULT_SHARING_NOT_FOUND, message: "Vault not found" } },
+            HttpStatus.NOT_FOUND,
+          );
+        }
+      } else {
+        const ownerCheck = await tx.execute<{ id: string }>(sql`
+          SELECT id FROM vault_memberships
+          WHERE vault_id = ${vaultId} AND user_id = ${requesterId} AND role = 'owner' AND status = 'active'
+          LIMIT 1
+        `);
+        if (!ownerCheck.rows[0]) {
+          throw new HttpException(
+            { error: { code: ErrorCodes.VAULT_SHARING_ACCESS_DENIED, message: "Access denied" } },
+            HttpStatus.FORBIDDEN,
+          );
+        }
+      }
+
+      // Lock the target membership row to prevent concurrent removes
+      const targetLock = await tx.execute<{ id: string; role: string }>(sql`
+        SELECT id, role FROM vault_memberships
+        WHERE vault_id = ${vaultId} AND user_id = ${targetUserId} AND status = 'active'
         LIMIT 1
+        FOR UPDATE
       `);
-      if (!access.rows[0]) {
+      const targetRow = targetLock.rows[0];
+      if (!targetRow) {
         throw new HttpException(
-          { error: { code: ErrorCodes.VAULT_SHARING_NOT_FOUND, message: "Vault not found" } },
+          { error: { code: ErrorCodes.VAULT_SHARING_NOT_FOUND, message: "Member not found" } },
           HttpStatus.NOT_FOUND,
         );
       }
-    } else {
-      // Removing another user: requester must be an active owner
-      const ownerCheck = await this.db.db.execute<{ id: string }>(sql`
-        SELECT id FROM vault_memberships
-        WHERE vault_id = ${vaultId} AND user_id = ${requesterId} AND role = 'owner' AND status = 'active'
-        LIMIT 1
-      `);
-      if (!ownerCheck.rows[0]) {
-        throw new HttpException(
-          { error: { code: ErrorCodes.VAULT_SHARING_ACCESS_DENIED, message: "Access denied" } },
-          HttpStatus.FORBIDDEN,
-        );
+
+      // Last-owner guard — also locked to prevent two concurrent last-owner removals
+      if (targetRow.role === "owner") {
+        const ownerCount = await tx.execute<{ n: number }>(sql`
+          SELECT COUNT(*)::int AS n
+          FROM vault_memberships
+          WHERE vault_id = ${vaultId} AND role = 'owner' AND status = 'active'
+          FOR UPDATE
+        `);
+        const count = ownerCount.rows[0]?.n ?? 0;
+        const countNum = typeof count === "number" ? count : Number(count);
+        if (countNum <= 1) {
+          throw new HttpException(
+            { error: { code: ErrorCodes.VAULT_SHARING_ACCESS_DENIED, message: "Cannot remove the last owner" } },
+            HttpStatus.CONFLICT,
+          );
+        }
       }
-    }
 
-    // Last-owner guard: check if target is an owner
-    const targetMembership = await this.db.db.execute<MembershipRow>(sql`
-      SELECT id, role, status FROM vault_memberships
-      WHERE vault_id = ${vaultId} AND user_id = ${targetUserId} AND status = 'active'
-      LIMIT 1
-    `);
-    const targetRow = targetMembership.rows[0];
-
-    if (targetRow && targetRow.role === "owner") {
-      // Count active owners
-      const ownerCount = await this.db.db.execute<{ n: number }>(sql`
-        SELECT COUNT(*)::int AS n
-        FROM vault_memberships
-        WHERE vault_id = ${vaultId} AND role = 'owner' AND status = 'active'
+      await tx.execute(sql`
+        DELETE FROM vault_memberships
+        WHERE vault_id = ${vaultId} AND user_id = ${targetUserId} AND status = 'active'
       `);
-      const count = ownerCount.rows[0]?.n ?? 0;
-      const countNum = typeof count === "number" ? count : Number(count);
-      if (countNum <= 1) {
-        throw new HttpException(
-          { error: { code: ErrorCodes.VAULT_SHARING_ACCESS_DENIED, message: "Cannot remove the last owner" } },
-          HttpStatus.CONFLICT,
-        );
-      }
-    }
-
-    const result = await this.db.db.execute<{ id: string }>(sql`
-      DELETE FROM vault_memberships
-      WHERE vault_id = ${vaultId} AND user_id = ${targetUserId} AND status = 'active'
-      RETURNING id
-    `);
-    if (result.rows.length === 0) {
-      throw new HttpException(
-        { error: { code: ErrorCodes.VAULT_SHARING_NOT_FOUND, message: "Vault not found" } },
-        HttpStatus.NOT_FOUND,
-      );
-    }
+    });
   }
 
   /**
