@@ -21,6 +21,7 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/crypto/package.json packages/crypto/
 COPY packages/db/package.json packages/db/
 COPY apps/api/package.json apps/api/
+COPY patches/ patches/
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --prod=false
