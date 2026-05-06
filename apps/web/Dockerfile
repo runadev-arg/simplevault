@@ -29,9 +29,11 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 FROM deps AS build
 WORKDIR /repo
 COPY packages/shared packages/shared
+COPY packages/crypto packages/crypto
 COPY apps/web apps/web
 
 RUN pnpm --filter @simplevault/shared build \
+ && pnpm --filter @simplevault/crypto build \
  && pnpm --filter @simplevault/web build
 
 # ---------- runner ----------
