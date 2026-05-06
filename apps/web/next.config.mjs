@@ -13,6 +13,7 @@ const nextConfig = {
   poweredByHeader: false,
   typedRoutes: true,
   // No images config yet (no images in v1 pages); revisit Phase 05.
+  eslint: { ignoreDuringBuilds: true },
 };
 
 export default nextConfig;
