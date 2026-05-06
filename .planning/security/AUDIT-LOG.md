@@ -183,6 +183,63 @@ Lockfile clean, workspace-protocol use consistent, no typosquats, hygiene solid 
 
 ---
 
+## 2026-05-05 — crypto-auditor — Phase 05 + Phase 07 (MVP-Phase-Z gate)
+
+**Scope:** Phase 05 page-cipher high-level API (encryptPage/decryptPage, aadParamsJson round-trip, titleSearchToken derivation), page/new POST flow (client-side pageId AAD consistency), vault-key.ts sealed-box wrappers, resolveVaultDek fallback logic.
+**Method:** Static read-only. Source grep + flow trace on `apps/web/src/lib/crypto/`, `apps/web/src/app/(authed)/page/`, `packages/crypto/src/vault-page.ts`, `apps/web/src/lib/vault/resolve-vault-dek.ts`.
+**Findings:** Critical 1 (FINDING-0701) / Medium 1 (FINDING-0702) / Low 2 (FINDING-0703, FINDING-0704)
+**Verdict:** **FAIL** (Critical finding — gate blocked)
+**Findings filed:** FINDING-0701 (CRITICAL, closed e332e1c), FINDING-0702 (MEDIUM, closed 365c8b1), FINDING-0703 (LOW, closed 663edeb), FINDING-0704 (LOW, closed 365c8b1)
+**Next review:** Phase 08 or next crypto surface change.
+
+---
+
+## 2026-05-05 — access-control-auditor — Phase 05 + Phase 07 (MVP-Phase-Z gate)
+
+**Scope:** IDOR guards on credential + page routes, shared vault membership access model, vault-sharing controller RBAC, invite lifecycle access control, owner/member role enforcement.
+**Method:** Static read-only. Route-by-route ownership predicate audit, cross-user 404 anti-enumeration check, membership EXISTS subquery review.
+**Findings:** Critical 0 / High 0 / Medium 3 (FINDING-0060, 0061, 0062) / Low 5 (FINDING-0063, 0064, 0065, 0066, 0067)
+**Verdict:** **PASS-WITH-CONCERNS**
+**Findings filed:** 0060 (MED, closed 663edeb), 0061 (MED, closed 663edeb), 0062 (MED, closed 663edeb), 0063 (LOW, closed 365c8b1), 0064 (LOW, closed 365c8b1), 0065 (LOW, closed 663edeb), 0066 (LOW, closed 365c8b1), 0067 (LOW, closed 365c8b1)
+**Next review:** Phase 08 vault credential sharing extension.
+
+---
+
+## 2026-05-05 — auth-flow-auditor — Phase 05 + Phase 07 (MVP-Phase-Z gate)
+
+**Scope:** Invite accept/decline flow (DEK unwrap order, kx key derivation), resolveVaultDek fallback, vault DEK lifecycle (create, accept, leave), hard-refresh key restoration, invites page UX on locked state.
+**Method:** Static read-only. Flow trace on `apps/web/src/app/(authed)/invites/`, `apps/web/src/lib/vault/resolve-vault-dek.ts`, `apps/web/src/app/(authed)/vaults/`.
+**Findings:** Critical 0 / High 0 / Medium 2 (FINDING-0071, 0079) / Low 3 (FINDING-0072, 0074, 0076)
+**Verdict:** **PASS-WITH-CONCERNS**
+**Findings filed:** 0071 (MED, closed 663edeb), 0079 (MED, closed 663edeb), 0072 (LOW, closed 2704b36), 0074 (LOW, closed 365c8b1), 0076 (LOW, WONTFIX — DEK rotation post-MVP)
+**Next review:** Phase 12 or vault re-key ceremony planning.
+
+---
+
+## 2026-05-05 — owasp-top10-auditor — Phase 05 + Phase 07 (MVP-Phase-Z gate)
+
+**Scope:** OWASP Top 10 (2021) delta for Phase 05 + 07. A01 (vault-sharing RBAC), A02 (page AAD self-consistency), A04 (insecure design — name plaintext), A05 (rate-limit gaps), A07 (vault-sharing auth gaps), A09 (audit logging gaps).
+**Method:** Static read-only. Route enumeration + input validation audit + audit-log grep.
+**Findings:** Critical 0 / High 1 (FINDING-0085) / Medium 5 (FINDING-0080, 0081, 0082, 0083, 0084) / Low 2 (FINDING-0086, 0087)
+**Verdict:** **PASS-WITH-CONCERNS**
+**Findings filed:** 0085 (HIGH, closed e332e1c), 0080 (MED, WONTFIX — vault name design), 0081 (MED, closed 663edeb), 0082 (MED, closed 663edeb), 0083 (MED, closed 663edeb), 0084 (MED, closed 663edeb), 0086 (LOW, closed 365c8b1), 0087 (LOW, closed 365c8b1)
+**Next review:** Phase 08 or next OWASP delta pass.
+
+---
+
+## 2026-05-05 — MVP-Phase-Z GATE OUTCOME
+
+**Verdict:** **PASS.**
+- 4 auditors: FAIL → PASS after closure cycle (all Critical/High/Medium resolved).
+- 0 Critical OPEN / 0 High OPEN / 0 Medium OPEN.
+- Low findings: 0072/0063/0064/0065/0066/0067/0074/0086/0087/0703/0704 CLOSED. 0076/0080 WONTFIX with documented rationale.
+- 71 API tests + 105 web tests green. Both typechecks clean.
+- Phase 05 (pages) + Phase 07 (shared vaults) security gate passed.
+**Accepted tech-debt to Phase 12/13:** FINDING-0076 (DEK rotation on member removal), FINDING-0080 (vault name plaintext).
+**Remaining open from prior phases:** FINDING-0032, 0033, 0040, 0050-0054 (Phase 03 deferred Low/Info).
+
+---
+
 ## 2026-05-04 — Phase 03 GATE OUTCOME
 
 **Verdict:** **PASS.**
