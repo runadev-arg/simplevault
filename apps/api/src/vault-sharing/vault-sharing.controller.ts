@@ -26,6 +26,7 @@ import {
   VaultSharingService,
   type MemberSummary,
   type PendingInvite,
+  type VaultInviteSummary,
   type VaultListItem,
 } from "./vault-sharing.service.js";
 
@@ -134,7 +135,7 @@ export class VaultSharingController {
   async getVaultInvites(
     @Req() req: AuthedRequest,
     @Param("id", new ParseUUIDPipe()) id: string,
-  ): Promise<PendingInvite[]> {
+  ): Promise<VaultInviteSummary[]> {
     return this.svc.getVaultInvites(req.user.id, id);
   }
 
@@ -200,6 +201,12 @@ export class VaultSharingController {
 
   @Post("invites/:inviteId/accept")
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({
+    [RateLimits.vaultSharingInvite.name]: {
+      limit: RateLimits.vaultSharingInvite.limit,
+      ttl: RateLimits.vaultSharingInvite.ttl,
+    },
+  })
   async acceptInvite(
     @Req() req: AuthedRequest,
     @Param("inviteId", new ParseUUIDPipe()) inviteId: string,
@@ -217,6 +224,12 @@ export class VaultSharingController {
 
   @Post("invites/:inviteId/decline")
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({
+    [RateLimits.vaultSharingInvite.name]: {
+      limit: RateLimits.vaultSharingInvite.limit,
+      ttl: RateLimits.vaultSharingInvite.ttl,
+    },
+  })
   async declineInvite(
     @Req() req: AuthedRequest,
     @Param("inviteId", new ParseUUIDPipe()) inviteId: string,
@@ -250,6 +263,12 @@ export class VaultSharingController {
 
   @Delete("vaults/:id/members/:userId")
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({
+    [RateLimits.vaultSharingInvite.name]: {
+      limit: RateLimits.vaultSharingInvite.limit,
+      ttl: RateLimits.vaultSharingInvite.ttl,
+    },
+  })
   async removeMember(
     @Req() req: AuthedRequest,
     @Param("id", new ParseUUIDPipe()) id: string,

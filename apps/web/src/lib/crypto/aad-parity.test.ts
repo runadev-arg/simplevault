@@ -10,6 +10,7 @@ import {
   AAD_LABEL_TOTP,
   AAD_LABEL_VAULT_CREDENTIAL,
   AAD_LABEL_VAULT_PAGE,
+  TITLE_SEARCH_HKDF_INFO,
 } from "./aad-labels";
 
 /**
@@ -97,6 +98,20 @@ describe("AAD label parity (FINDING-0026 closure)", () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("TITLE_SEARCH_HKDF_INFO in aad-labels.ts matches the private const in packages/crypto/src/vault-page.ts (FINDING-0702)", () => {
+    // vault-page.ts declares a private const (not exported) — read the source to
+    // extract the literal and assert byte equality with aad-labels.ts export.
+    // If they diverge, all persisted titleSearchToken values become unsearchable.
+    const vaultPagePath = path.resolve(
+      __dirname,
+      "../../../../../packages/crypto/src/vault-page.ts",
+    );
+    const src = fs.readFileSync(vaultPagePath, "utf8");
+    const m = src.match(/const TITLE_SEARCH_HKDF_INFO\s*=\s*"([^"]+)"/);
+    expect(m, "TITLE_SEARCH_HKDF_INFO not found in vault-page.ts").toBeTruthy();
+    expect(m![1]).toBe(TITLE_SEARCH_HKDF_INFO);
   });
 
   it("aad-labels.ts is the ONLY file under apps/web/src/lib/crypto/ with the literals", () => {

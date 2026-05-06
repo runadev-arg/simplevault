@@ -75,6 +75,12 @@ export const AuditAction = {
   VaultInviteAccepted: "vault.invite.accepted",
   VaultInviteDeclined: "vault.invite.declined",
   VaultMemberRemoved: "vault.member.removed",
+  // Phase 05 — page CRUD audit events. `targetId` is the pageId. `data.vaultId`
+  // + `data.version` carry context. NO ciphertext/nonce/titleSearchToken in data.
+  PageCreate: "page.create",
+  PageView: "page.view",
+  PageUpdate: "page.update",
+  PageDelete: "page.delete",
 } as const;
 
 export type AuditActionValue = (typeof AuditAction)[keyof typeof AuditAction];

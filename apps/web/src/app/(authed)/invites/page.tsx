@@ -9,6 +9,7 @@
  */
 
 import { type JSX, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import sodium from "libsodium-wrappers-sumo";
 
@@ -55,20 +56,16 @@ export default function InvitesPage(): JSX.Element {
     setError(null);
     setProcessing(invite.id);
     try {
-      // Resolve kx keypair from keyStore.
-      let kxPk = keyStore.getBytes("kx_pk");
+      // kx_pk is never stored — always derived on demand from kx_sk.
       const kxSk = keyStore.getBytes("kx_sk");
 
       if (kxSk === undefined) {
-        setError("Vault locked. Please sign in again.");
+        setError("kx_sk_missing");
         setProcessing(null);
         return;
       }
 
-      if (kxPk === undefined) {
-        // Derive the public key from the secret key.
-        kxPk = sodium.crypto_scalarmult_base(kxSk);
-      }
+      const kxPk = sodium.crypto_scalarmult_base(kxSk);
 
       const vaultDek = await unwrapVaultKey(invite.wrappedVaultKey, kxPk, kxSk);
       // Confirm server-side first; only store DEK in memory on success.
@@ -104,14 +101,25 @@ export default function InvitesPage(): JSX.Element {
   }
 
   if (error !== null) {
+    const isLocked = error === "kx_sk_missing";
     return (
       <main className="mx-auto max-w-3xl px-6 py-10">
         <p
           role="alert"
           className="rounded-md border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200"
         >
-          {error}
+          {isLocked
+            ? "Your vault key is not loaded. Please sign in again to accept invites."
+            : error}
         </p>
+        {isLocked && (
+          <Link
+            href="/login"
+            className="mt-3 inline-block rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-white"
+          >
+            Sign in again
+          </Link>
+        )}
       </main>
     );
   }

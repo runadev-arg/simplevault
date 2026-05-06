@@ -32,7 +32,15 @@ export interface PendingInvite {
   vaultId: string;
   vaultName: string | null;
   invitedByEmail: string;
-  wrappedVaultKey: string; // base64url
+  wrappedVaultKey: string; // base64url — only returned to the invitee
+  createdAt: string;
+}
+
+/** Owner-facing invite summary — omits wrappedVaultKey (FINDING-0066). */
+export interface VaultInviteSummary {
+  id: string;
+  vaultId: string;
+  invitedByEmail: string;
   createdAt: string;
 }
 
@@ -467,7 +475,7 @@ export class VaultSharingService {
    * Get pending invites sent for a vault (owner view).
    * Requester must be an active owner.
    */
-  async getVaultInvites(requesterId: string, vaultId: string): Promise<PendingInvite[]> {
+  async getVaultInvites(requesterId: string, vaultId: string): Promise<VaultInviteSummary[]> {
     // Verify requester is an active owner
     const ownerCheck = await this.db.db.execute<{ id: string }>(sql`
       SELECT id FROM vault_memberships
@@ -499,9 +507,7 @@ export class VaultSharingService {
     return result.rows.map((row) => ({
       id: row.id,
       vaultId: row.vault_id,
-      vaultName: row.vault_name,
       invitedByEmail: row.invited_by_email,
-      wrappedVaultKey: Buffer.from(row.wrapped_vault_key).toString("base64url"),
       createdAt: toIso(row.created_at),
     }));
   }

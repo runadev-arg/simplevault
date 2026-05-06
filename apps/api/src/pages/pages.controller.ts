@@ -6,6 +6,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Logger,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -18,6 +19,7 @@ import { ErrorCodes } from "@simplevault/shared/errors";
 import { PageCreateSchema, PageUpdateSchema } from "@simplevault/shared/zod";
 
 import type { AuthedRequest } from "../auth/jwt/jwt-auth.guard.js";
+import { AuditAction, AuditEventService } from "../common/audit-events.js";
 import { RateLimits } from "../common/throttler.config.js";
 
 import {
@@ -49,6 +51,8 @@ import {
  */
 @Controller()
 export class PagesController {
+  private readonly logger = new Logger(PagesController.name);
+
   constructor(private readonly svc: PagesService) {}
 
   @Get("pages")
@@ -89,7 +93,15 @@ export class PagesController {
         error: { code: ErrorCodes.VALIDATION_FAILED, message: "Invalid request body" },
       });
     }
-    return this.svc.create(req.user.id, parsed.data);
+    const result = await this.svc.create(req.user.id, parsed.data);
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.PageCreate,
+      actorUserId: req.user.id,
+      targetId: result.id,
+      outcome: "ok",
+      data: { vaultId: result.vaultId, version: result.version },
+    });
+    return result;
   }
 
   @Get("pages/:id")
@@ -103,7 +115,15 @@ export class PagesController {
     @Req() req: AuthedRequest,
     @Param("id", new ParseUUIDPipe({ version: "4" })) id: string,
   ): Promise<PageResponse> {
-    return this.svc.getById(req.user.id, id);
+    const result = await this.svc.getById(req.user.id, id);
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.PageView,
+      actorUserId: req.user.id,
+      targetId: id,
+      outcome: "ok",
+      data: { vaultId: result.vaultId, version: result.version },
+    });
+    return result;
   }
 
   @Patch("pages/:id")
@@ -124,7 +144,15 @@ export class PagesController {
         error: { code: ErrorCodes.VALIDATION_FAILED, message: "Invalid request body" },
       });
     }
-    return this.svc.update(req.user.id, id, parsed.data);
+    const result = await this.svc.update(req.user.id, id, parsed.data);
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.PageUpdate,
+      actorUserId: req.user.id,
+      targetId: id,
+      outcome: "ok",
+      data: { vaultId: result.vaultId, version: result.version },
+    });
+    return result;
   }
 
   @Delete("pages/:id")
@@ -140,6 +168,12 @@ export class PagesController {
     @Param("id", new ParseUUIDPipe({ version: "4" })) id: string,
   ): Promise<void> {
     await this.svc.delete(req.user.id, id);
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.PageDelete,
+      actorUserId: req.user.id,
+      targetId: id,
+      outcome: "ok",
+    });
   }
 
   @Get("pages/:id/history")
