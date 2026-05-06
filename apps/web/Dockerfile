@@ -28,6 +28,11 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 # ---------- build ----------
 FROM deps AS build
 WORKDIR /repo
+
+# NEXT_PUBLIC_* vars are embedded at build time by Next.js — must be ARGs.
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 COPY packages/shared packages/shared
 COPY packages/crypto packages/crypto
 COPY apps/web apps/web
