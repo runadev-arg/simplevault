@@ -563,6 +563,145 @@ All findings reported by security auditor agents (manual or automated). Tracked 
 - **Status:** OPEN
 - **Blocks-phase:** NO
 
+---
+
+## MVP-Phase-Z audit findings (Phase 05 + Phase 07 — 2026-05-05)
+
+Findings raised by the consolidated 4-auditor security gate run at end of Phases 05 and 07.
+All Critical and High findings are resolved. Medium findings are resolved.
+Low findings 0072 resolved; 0076 and 0080 accepted as design trade-offs.
+
+### FINDING-0701 — Page creation permanently broken: client pageId never sent to server
+
+- **Severity:** Critical
+- **Reporter:** crypto-auditor (MVP-Phase-Z)
+- **Date opened:** 2026-05-05
+- **Phase:** 05
+- **Affected:** `apps/web/src/app/(authed)/page/new/page.tsx`, `apps/web/src/lib/api/pages-client.ts`, `packages/shared/src/zod/index.ts`
+- **Description:** `/page/new` generated a client-side `pageId = crypto.randomUUID()` and bound it into the AEAD's `aadParamsJson`. However it never included `pageId` in the POST body. The server generated its own UUID via `gen_random_uuid()`. The stored row's primary key differed from the `pageId` in `aadParamsJson`. Navigation used the client UUID → immediate 404. All pages created via Phase 05 were silently inaccessible.
+- **Recommendation:** Add `pageId` to `PageCreateSchema`, `CreatePageInput`, the `createPage` POST body. Navigate to `result.id` from the server response.
+- **Status:** VERIFIED-CLOSED
+- **Resolved-by-commit:** e332e1c
+- **Blocks-phase:** YES (gate blocker)
+
+### FINDING-0085 — No audit events emitted by VaultSharingController
+
+- **Severity:** High
+- **Reporter:** owasp-top10-auditor (MVP-Phase-Z)
+- **Date opened:** 2026-05-05
+- **Phase:** 07
+- **Affected:** `apps/api/src/vault-sharing/vault-sharing.controller.ts`, `apps/api/src/common/audit-events.ts`
+- **Description:** All 10 vault-sharing routes emitted zero audit events. `createGroupVault`, `createInvite`, `acceptInvite`, `declineInvite`, and `removeMember` left no forensic trace.
+- **Recommendation:** Extend `AuditAction` enum with vault lifecycle events; inject Logger and call `AuditEventService.emit()` in the controller.
+- **Status:** VERIFIED-CLOSED
+- **Resolved-by-commit:** e332e1c
+- **Blocks-phase:** YES (gate blocker)
+
+### FINDING-0060 / FINDING-0084 — TOCTOU race in removeMember last-owner guard
+
+- **Severity:** Medium
+- **Reporter:** access-control-auditor (MVP-Phase-Z)
+- **Date opened:** 2026-05-05
+- **Phase:** 07
+- **Affected:** `apps/api/src/vault-sharing/vault-sharing.service.ts` `removeMember`
+- **Description:** The last-owner guard used three separate non-transactional queries: access check → target membership SELECT → owner COUNT → DELETE. A concurrent second removal could pass both COUNT checks before either DELETE ran, eliminating all owners.
+- **Recommendation:** Run the entire sequence inside `db.transaction()` with `SELECT ... FOR UPDATE` on the target membership row and the owner count.
+- **Status:** VERIFIED-CLOSED
+- **Resolved-by-commit:** 663edeb
+
+### FINDING-0061 / FINDING-0062 — Shared vault members get 404 on credential access
+
+- **Severity:** Medium
+- **Reporter:** access-control-auditor (MVP-Phase-Z)
+- **Date opened:** 2026-05-05
+- **Phase:** 07
+- **Affected:** `apps/api/src/credentials/credentials.service.ts` (all four CRUD methods)
+- **Description:** All credential queries joined on `vaults.owner_user_id = $userId`. Shared vault members who are not the owner received 404 on list, read, update, and delete — defeating the purpose of shared vaults.
+- **Recommendation:** Add `OR EXISTS (SELECT 1 FROM vault_memberships WHERE ... AND status='active')` to all credential ownership predicates.
+- **Status:** VERIFIED-CLOSED
+- **Resolved-by-commit:** 663edeb
+
+### FINDING-0071 / FINDING-0079 — resolveVaultDek silently falls back to master_dek for locked shared vault
+
+- **Severity:** Medium
+- **Reporter:** auth-flow-auditor (MVP-Phase-Z)
+- **Date opened:** 2026-05-05
+- **Phase:** 07
+- **Affected:** `apps/web/src/lib/vault/resolve-vault-dek.ts`
+- **Description:** When `vaultId` was provided but `vault_dek:${vaultId}` was absent from keyStore (vault locked or invite not yet accepted), the function fell back to `master_dek`. This would silently encrypt shared-vault credentials under the personal vault key, causing permanent decryption failure for other members.
+- **Recommendation:** Return `undefined` when `vaultId` is set but its DEK is not in keyStore. Let callers surface "vault locked — re-accept invite" error.
+- **Status:** VERIFIED-CLOSED
+- **Resolved-by-commit:** 663edeb
+
+### FINDING-0081 — Missing UUID validation for inviteeId in POST /vaults/:id/invites
+
+- **Severity:** Medium
+- **Reporter:** owasp-top10-auditor (MVP-Phase-Z)
+- **Date opened:** 2026-05-05
+- **Phase:** 07
+- **Affected:** `apps/api/src/vault-sharing/vault-sharing.controller.ts` `createInvite`
+- **Description:** `inviteeId` was only checked for being a non-empty string, not validated as a UUID. Passing a malformed value would propagate to the DB as a bad literal and cause a DB-level error rather than a clean 400.
+- **Status:** VERIFIED-CLOSED
+- **Resolved-by-commit:** 663edeb
+
+### FINDING-0082 — No length cap on wrappedVaultKey
+
+- **Severity:** Medium
+- **Reporter:** owasp-top10-auditor (MVP-Phase-Z)
+- **Date opened:** 2026-05-05
+- **Phase:** 07
+- **Affected:** `apps/api/src/vault-sharing/vault-sharing.controller.ts` `createInvite`
+- **Description:** A legitimate sealed-box `wrappedVaultKey` is 80 bytes → 107 base64url chars. No upper bound was enforced, allowing arbitrarily large blobs in the membership row.
+- **Status:** VERIFIED-CLOSED
+- **Resolved-by-commit:** 663edeb
+
+### FINDING-0083 — No email format validation for GET /users/lookup
+
+- **Severity:** Medium
+- **Reporter:** owasp-top10-auditor (MVP-Phase-Z)
+- **Date opened:** 2026-05-05
+- **Phase:** 07
+- **Affected:** `apps/api/src/vault-sharing/vault-sharing.controller.ts` `lookupUser`
+- **Description:** The `?email=` query parameter was only checked for non-empty; no RFC 5321 format check or length cap was applied.
+- **Status:** VERIFIED-CLOSED
+- **Resolved-by-commit:** 663edeb
+
+### FINDING-0072 — Accept-invite stores DEK in keyStore before server confirms
+
+- **Severity:** Low
+- **Reporter:** auth-flow-auditor (MVP-Phase-Z)
+- **Date opened:** 2026-05-05
+- **Phase:** 07
+- **Affected:** `apps/web/src/app/(authed)/invites/page.tsx` `handleAccept`
+- **Description:** `keyStore.set("vault_dek:"+vaultId, dek)` was called before `acceptInvite()`. A server rejection or network error would leave the DEK in keyStore without a corresponding active membership, allowing the UI to show the vault as accessible.
+- **Recommendation:** Call `acceptInvite()` first; store DEK only on success.
+- **Status:** VERIFIED-CLOSED
+- **Resolved-by-commit:** 2704b36
+
+### FINDING-0076 — Vault DEK not rotated after member removal
+
+- **Severity:** Low
+- **Reporter:** auth-flow-auditor (MVP-Phase-Z)
+- **Date opened:** 2026-05-05
+- **Phase:** 07
+- **Affected:** vault-sharing infrastructure (by design)
+- **Description:** When a member is removed, other members retain their copy of the vault DEK in keyStore. The removed member's in-memory copy persists until logout. No re-encryption of vault contents is performed on removal.
+- **Status:** WONTFIX-WITH-RATIONALE
+- **Rationale:** DEK rotation on membership change is a well-known hard problem (requires re-encrypting all vault credentials). Accepted for MVP. Post-Phase-12 hardening will add a vault re-key ceremony. Documented in RUNBOOK under "Member removal does not rotate vault DEK".
+
+### FINDING-0080 — Vault name stored in plaintext
+
+- **Severity:** Low
+- **Reporter:** owasp-top10-auditor (MVP-Phase-Z)
+- **Date opened:** 2026-05-05
+- **Phase:** 07
+- **Affected:** `vaults.name` column
+- **Description:** Shared vault names are stored and returned in plaintext. An adversary with DB read access sees vault names. Within the member set, vault names are not secrets.
+- **Status:** WONTFIX-WITH-RATIONALE
+- **Rationale:** Vault names are treated as low-sensitivity metadata shared among members. Encrypting names would require a separate key management layer and would complicate the invite/list flow for no meaningful security gain at the ≤50-user scale. Accepted design decision.
+
+---
+
 ## Closed findings
 
 _(All FINDING-0001..0009 are VERIFIED-CLOSED above; kept inline for traceability rather than moved out, since they're the entire Phase 01 set. Future phases will move closed findings into this section.)_
