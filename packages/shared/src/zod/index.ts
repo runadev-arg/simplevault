@@ -266,6 +266,9 @@ const pageBase64ToBytesBounded = (
  */
 export const PageCreateSchema = z
   .object({
+    /** Client-chosen UUIDv4. When supplied the server uses COALESCE(pageId, gen_random_uuid()),
+     *  ensuring the id in `aadParamsJson` matches the stored row's primary key. */
+    pageId: z.string().uuid().optional(),
     vaultId: z.string().uuid(),
     ciphertext: pageBase64ToBytesBounded(
       1,

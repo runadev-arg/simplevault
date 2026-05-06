@@ -102,14 +102,15 @@ export default function NewPagePage(): JSX.Element {
           email: ctx.email,
         },
       );
-      await createPage(accessToken, {
+      const result = await createPage(accessToken, {
+        pageId,
         vaultId: ctx.vaultId,
         ciphertext: envelope.ciphertext,
         nonce: envelope.nonce,
         aadParamsJson: envelope.aadParamsJson,
         titleSearchToken: envelope.titleSearchToken,
       });
-      router.replace(`/page/${encodeURIComponent(pageId)}`);
+      router.replace(`/page/${encodeURIComponent(result.id)}`);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Save failed");
     } finally {

@@ -68,6 +68,13 @@ export const AuditAction = {
   CredentialView: "credential.view",
   CredentialUpdate: "credential.update",
   CredentialDelete: "credential.delete",
+  // Phase 07 — shared vault lifecycle events.
+  // `targetId` is the vaultId for vault/invite events; memberId for removals.
+  VaultCreate: "vault.create",
+  VaultInviteSent: "vault.invite.sent",
+  VaultInviteAccepted: "vault.invite.accepted",
+  VaultInviteDeclined: "vault.invite.declined",
+  VaultMemberRemoved: "vault.member.removed",
 } as const;
 
 export type AuditActionValue = (typeof AuditAction)[keyof typeof AuditAction];

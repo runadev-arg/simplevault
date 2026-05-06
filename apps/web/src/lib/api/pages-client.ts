@@ -151,6 +151,8 @@ export interface PageHistoryItem {
 }
 
 export interface CreatePageInput {
+  /** Client-chosen UUIDv4 — must match the `pageId` embedded in `aadParamsJson`. */
+  pageId: string;
   vaultId: string;
   ciphertext: Uint8Array;
   nonce: Uint8Array;
@@ -238,6 +240,7 @@ export async function createPage(
     raw = await request("/pages", {
       method: "POST",
       body: {
+        pageId: input.pageId,
         vaultId: input.vaultId,
         ciphertext: bytesToB64Url(input.ciphertext),
         nonce: bytesToB64Url(input.nonce),

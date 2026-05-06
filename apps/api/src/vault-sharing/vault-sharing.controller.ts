@@ -6,6 +6,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Logger,
   Param,
   ParseUUIDPipe,
   Post,
@@ -17,6 +18,7 @@ import { Throttle } from "@nestjs/throttler";
 import { ErrorCodes } from "@simplevault/shared/errors";
 
 import type { AuthedRequest } from "../auth/jwt/jwt-auth.guard.js";
+import { AuditAction, AuditEventService } from "../common/audit-events.js";
 import { RateLimits } from "../common/throttler.config.js";
 import { Require2FAGuard } from "../twofa/require-2fa.guard.js";
 
@@ -48,6 +50,8 @@ import {
 @Controller()
 @UseGuards(Require2FAGuard)
 export class VaultSharingController {
+  private readonly logger = new Logger(VaultSharingController.name);
+
   constructor(private readonly svc: VaultSharingService) {}
 
   // ------------------------------------------------------------------ POST /vaults/group
@@ -72,7 +76,15 @@ export class VaultSharingController {
         error: { code: ErrorCodes.VALIDATION_FAILED, message: "name and wrappedVaultKey are required" },
       });
     }
-    return this.svc.createGroupVault(req.user.id, name, wrappedVaultKey);
+    const result = await this.svc.createGroupVault(req.user.id, name, wrappedVaultKey);
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.VaultCreate,
+      actorUserId: req.user.id,
+      targetId: result.id,
+      outcome: "ok",
+      data: { kind: "shared" },
+    });
+    return result;
   }
 
   // ------------------------------------------------------------------ GET /vaults
@@ -148,7 +160,14 @@ export class VaultSharingController {
         error: { code: ErrorCodes.VALIDATION_FAILED, message: "inviteeId and wrappedVaultKey are required" },
       });
     }
-    return this.svc.createInvite(req.user.id, id, inviteeId, wrappedVaultKey);
+    await this.svc.createInvite(req.user.id, id, inviteeId, wrappedVaultKey);
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.VaultInviteSent,
+      actorUserId: req.user.id,
+      targetId: id,
+      outcome: "ok",
+      data: { inviteeId },
+    });
   }
 
   // ------------------------------------------------------------------ GET /invites
@@ -172,7 +191,13 @@ export class VaultSharingController {
     @Req() req: AuthedRequest,
     @Param("inviteId", new ParseUUIDPipe()) inviteId: string,
   ): Promise<void> {
-    return this.svc.acceptInvite(req.user.id, inviteId);
+    await this.svc.acceptInvite(req.user.id, inviteId);
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.VaultInviteAccepted,
+      actorUserId: req.user.id,
+      targetId: inviteId,
+      outcome: "ok",
+    });
   }
 
   // ------------------------------------------------------------------ POST /invites/:inviteId/decline
@@ -183,7 +208,13 @@ export class VaultSharingController {
     @Req() req: AuthedRequest,
     @Param("inviteId", new ParseUUIDPipe()) inviteId: string,
   ): Promise<void> {
-    return this.svc.declineInvite(req.user.id, inviteId);
+    await this.svc.declineInvite(req.user.id, inviteId);
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.VaultInviteDeclined,
+      actorUserId: req.user.id,
+      targetId: inviteId,
+      outcome: "ok",
+    });
   }
 
   // ------------------------------------------------------------------ GET /vaults/:id/members
@@ -211,6 +242,13 @@ export class VaultSharingController {
     @Param("id", new ParseUUIDPipe()) id: string,
     @Param("userId", new ParseUUIDPipe()) userId: string,
   ): Promise<void> {
-    return this.svc.removeMember(req.user.id, id, userId);
+    await this.svc.removeMember(req.user.id, id, userId);
+    AuditEventService.emit(this.logger, {
+      action: AuditAction.VaultMemberRemoved,
+      actorUserId: req.user.id,
+      targetId: id,
+      outcome: "ok",
+      data: { removedUserId: userId, self: req.user.id === userId },
+    });
   }
 }
