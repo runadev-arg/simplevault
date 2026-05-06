@@ -71,8 +71,9 @@ export default function InvitesPage(): JSX.Element {
       }
 
       const vaultDek = await unwrapVaultKey(invite.wrappedVaultKey, kxPk, kxSk);
-      keyStore.set("vault_dek:" + invite.vaultId, vaultDek);
+      // Confirm server-side first; only store DEK in memory on success.
       await acceptInvite(accessToken, invite.id);
+      keyStore.set("vault_dek:" + invite.vaultId, vaultDek);
       router.push("/vaults/" + invite.vaultId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to accept invite.");
