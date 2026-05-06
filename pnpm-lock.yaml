@@ -73,6 +73,9 @@ importers:
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@types/pg@8.20.0)(pg@8.20.0)
+      express:
+        specifier: ^5.0.0
+        version: 5.2.1
       helmet:
         specifier: ^8.0.0
         version: 8.1.0
