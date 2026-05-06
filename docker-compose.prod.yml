@@ -1,0 +1,42 @@
+name: simplevault
+
+x-restart: &restart
+  restart: unless-stopped
+
+x-security: &security
+  security_opt:
+    - no-new-privileges:true
+  cap_drop: [ALL]
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    <<: [*restart, *security]
+    mem_limit: 512m
+    pids_limit: 200
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    networks: [internal, dokploy-network]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    <<: [*restart, *security]
+    depends_on:
+      api: { condition: service_started }
+    mem_limit: 512m
+    pids_limit: 200
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    networks: [internal, dokploy-network]
+
+networks:
+  internal:
+    driver: bridge
+  dokploy-network:
+    external: true
