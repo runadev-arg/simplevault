@@ -18,9 +18,9 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }): Promise<JSX.Element> {
-  // Reading headers makes this layout dynamic per-request, which is required
+  // Calling headers() makes this layout dynamic per-request, which is required
   // for Next.js to apply the per-request CSP nonce to its generated scripts.
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
+  await headers();
 
   return (
     <html lang="es" className="dark" suppressHydrationWarning>
