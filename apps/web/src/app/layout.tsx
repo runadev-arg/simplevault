@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import type { Metadata, Viewport } from "next";
 import type { JSX, ReactNode } from "react";
 
@@ -16,7 +17,11 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }): JSX.Element {
+export default async function RootLayout({ children }: { children: ReactNode }): Promise<JSX.Element> {
+  // Reading headers makes this layout dynamic per-request, which is required
+  // for Next.js to apply the per-request CSP nonce to its generated scripts.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html lang="es" className="dark" suppressHydrationWarning>
       <body>{children}</body>
