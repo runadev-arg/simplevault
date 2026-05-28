@@ -219,9 +219,13 @@ function LoginPageInner(): JSX.Element {
       // material. The user's typed password is dropped here (string GC).
 
       setPhase("ok");
-      // Hard navigate: full page reload tears down React state including
-      // the typed password from the form's closures.
-      window.location.assign("/me");
+      // Soft navigate (NOT window.location.assign): a full page reload would
+      // tear down the JS realm and wipe the in-memory keyStore we just
+      // populated with master_DEK — leaving every vault/notes page "locked".
+      // The typed password is dropped on unmount + GC (it cannot be reliably
+      // zeroed in JS regardless; see key-store.ts), and master_DEK must stay
+      // resident in memory for the vault to function this session anyway.
+      router.push("/pages");
     } catch (e2) {
       // Wipe ANY partially-derived keys from memory before re-renders.
       try {
