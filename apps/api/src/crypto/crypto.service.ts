@@ -53,6 +53,46 @@ function decodeSecret(raw: string, minBytes: number, name: string): Buffer {
   return candidates.reduce((a, b) => (b.length > a.length ? b : a));
 }
 
+/**
+ * Decode SERVER_ARGON_SALT to EXACTLY `crypto_pwhash_SALTBYTES` (16 bytes).
+ *
+ * Argon2id requires a fixed 16-byte salt: the client runs libsodium
+ * `crypto_pwhash` over `from_base64(serverArgonSalt)` and that call throws
+ * ("invalid input") for any other length, which surfaces as an opaque
+ * "network/unexpected error" during signup.
+ *
+ * We CANNOT reuse `decodeSecret` here: its "pick longest" heuristic selects
+ * the 24-byte utf8 view of a base64-encoded 16-byte salt (e.g.
+ * `openssl rand -base64 16` → `"…=="`, 24 chars) over the correct 16-byte
+ * base64 decoding. So we try base64 → hex → utf8 and accept the FIRST that
+ * yields exactly 16 bytes.
+ */
+function decodeArgonSalt(raw: string): Buffer {
+  const candidates: Buffer[] = [];
+  try {
+    const b = Buffer.from(raw, "base64");
+    if (Buffer.from(b.toString("base64").replace(/=+$/, ""), "base64").equals(b)) {
+      candidates.push(b);
+    }
+  } catch {
+    /* ignore */
+  }
+  if (/^[0-9a-fA-F]+$/.test(raw) && raw.length % 2 === 0) {
+    candidates.push(Buffer.from(raw, "hex"));
+  }
+  candidates.push(Buffer.from(raw, "utf8"));
+
+  const exact = candidates.find((b) => b.length === 16);
+  if (!exact) {
+    throw new Error(
+      `SERVER_ARGON_SALT must decode to exactly 16 bytes (base64/hex/utf8); ` +
+        `candidate lengths were ${candidates.map((c) => c.length.toString()).join("/")}. ` +
+        `Generate with \`openssl rand -base64 16\`.`,
+    );
+  }
+  return exact;
+}
+
 @Injectable()
 export class CryptoService implements OnModuleInit {
   private readonly logger = new Logger(CryptoService.name);
@@ -76,10 +116,11 @@ export class CryptoService implements OnModuleInit {
     this.recoveryHmacSecret = decodeSecret(recoveryRaw, 32, "SERVER_RECOVERY_HMAC_SECRET");
 
     if (argonSaltRaw) {
-      this.serverArgonSalt = decodeSecret(argonSaltRaw, 16, "SERVER_ARGON_SALT");
-      if (this.serverArgonSalt.length < 16) {
-        throw new Error("SERVER_ARGON_SALT must decode to at least 16 bytes");
-      }
+      // EXACTLY 16 bytes — Argon2id (libsodium crypto_pwhash) rejects any other
+      // length. `decodeSecret`'s pick-longest heuristic would wrongly yield the
+      // 24-byte utf8 view of a base64-encoded 16-byte salt; use the dedicated
+      // exact-length decoder instead.
+      this.serverArgonSalt = decodeArgonSalt(argonSaltRaw);
     } else {
       this.logger.warn(
         "SERVER_ARGON_SALT is not set — using a random in-memory salt (auth verifiers will not survive restarts; set in prod)",
