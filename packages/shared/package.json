@@ -21,6 +21,6 @@
     "@simplevault/tsconfig": "workspace:*",
     "@simplevault/eslint-config": "workspace:*",
     "eslint": "^9.17.0",
-    "typescript": "~5.7.0"
+    "typescript": "~6.0.3"
   }
 }
